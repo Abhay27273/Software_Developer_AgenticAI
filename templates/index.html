@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Planning Agent Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        #requirements-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.3s ease;
+        }
+        
+        #requirements-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        #context-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            resize: vertical;
+            min-height: 80px;
+            transition: border-color 0.3s ease;
+        }
+        
+        #context-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .progress-container {
+            margin-bottom: 25px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e1e1e1;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+        
+        .progress-text {
+            text-align: center;
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .planning-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .status-item.active {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .status-item.completed {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+        
+        .status-item.error {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+            margin-left: auto;
+        }
+        
+        .status-indicator.pending {
+            background: #ffc107;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.completed {
+            background: #28a745;
+        }
+        
+        .status-indicator.error {
+            background: #dc3545;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .logs-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .log-entry {
+            color: #00ff00;
+            margin-bottom: 5px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+        
+        .log-entry.warning {
+            color: #ffd93d;
+        }
+        
+        .log-entry.info {
+            color: #74c0fc;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 1000;
+        }
+        
+        .connection-status.connected {
+            background: #28a745;
+            color: white;
+        }
+        
+        .connection-status.disconnected {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .task-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+        
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .task-card.completed {
+            border-left-color: #28a745;
+            background: #f0fff4;
+        }
+        
+        .task-card.in-progress {
+            border-left-color: #ffc107;
+            background: #fff9e6;
+        }
+        
+        .task-card.failed {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+        
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        
+        .task-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .task-priority {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .task-priority.high {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .task-priority.medium {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .task-priority.low {
+            background: #28a745;
+            color: white;
+        }
+        
+        .task-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .task-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .plan-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .planning-status {
+                grid-template-columns: 1fr;
+            }
+            
+            .tasks-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connection-status">Connecting...</div>
+
+    <div class="container">
+        <header class="header">
+            <h1>🤖 AI Planning Agent</h1>
+            <p>Intelligent Project Planning & Task Management</p>
+        </header>
+
+        <!-- Planning Input Section -->
+        <div class="card">
+            <h2>📝 Project Requirements</h2>
+            <div class="form-group">
+                <label for="requirements-input">Project Description:</label>
+                <textarea id="requirements-input" placeholder="Describe your project requirements in detail...">Build a web-based task management application with user authentication, real-time updates, task categorization, and REST API endpoints.</textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="context-input">Additional Context (optional):</label>
+                <textarea id="context-input" placeholder="Any additional context, constraints, or preferences..."></textarea>
+            </div>
+
+            <button id="start-planning" class="btn btn-primary">
+                🚀 Start Planning
+            </button>
+        </div>
+
+        <!-- Planning Progress -->
+        <div class="card">
+            <h2>📊 Planning Progress</h2>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-text" id="progress-text">Ready to start planning</div>
+            </div>
+
+            <div class="planning-status">
+                <div class="status-item" id="analysis-status">
+                    🔍 <span>Analysis</span>
+                    <div class="status-indicator" id="analysis-indicator"></div>
+                </div>
+                <div class="status-item" id="breakdown-status">
+                    📋 <span>Task Breakdown</span>
+                    <div class="status-indicator" id="breakdown-indicator"></div>
+                </div>
+                <div class="status-item" id="dependencies-status">
+                    🔗 <span>Dependencies</span>
+                    <div class="status-indicator" id="dependencies-indicator"></div>
+                </div>
+                <div class="status-item" id="estimation-status">
+                    ⏱️ <span>Estimation</span>
+                    <div class="status-indicator" id="estimation-indicator"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Logs -->
+        <div class="card">
+            <h2>📡 Live Logs</h2>
+            <div class="logs-container" id="logs-container">
+                <div class="log-entry">Planning agent ready. Configure your project and click "Start Planning".</div>
+            </div>
+        </div>
+
+        <!-- Plan Summary -->
+        <div class="card" id="plan-summary-section" style="display: none;">
+            <h2>📈 Plan Summary</h2>
+            <div class="plan-summary">
+                <div class="summary-stats" id="summary-stats">
+                    <!-- Stats will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Generated Tasks -->
+        <div class="card" id="tasks-section" style="display: none;">
+            <h2>✅ Generated Tasks</h2>
+            <div class="tasks-grid" id="tasks-grid">
+                <!-- Tasks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PlanningDashboard {
+            constructor() {
+                this.ws = null;
+                this.currentPlan = null;
+                this.reconnectInterval = 5000;
+                this.maxReconnectAttempts = 5;
+                this.reconnectAttempts = 0;
+                this.isConnecting = false;
+
+                this.initializeElements();
+                this.bindEvents();
+                this.connectWebSocket();
+            }
+
+            initializeElements() {
+                this.startBtn = document.getElementById('start-planning');
+                this.requirementsInput = document.getElementById('requirements-input');
+                this.contextInput = document.getElementById('context-input');
+                this.progressFill = document.getElementById('progress-fill');
+                this.progressText = document.getElementById('progress-text');
+                this.logsContainer = document.getElementById('logs-container');
+                this.connectionStatus = document.getElementById('connection-status');
+                this.planSummarySection = document.getElementById('plan-summary-section');
+                this.tasksSection = document.getElementById('tasks-section');
+                this.tasksGrid = document.getElementById('tasks-grid');
+                this.summaryStats = document.getElementById('summary-stats');
+
+                this.statusIndicators = {
+                    analysis: document.getElementById('analysis-indicator'),
+                    breakdown: document.getElementById('breakdown-indicator'),
+                    dependencies: document.getElementById('dependencies-indicator'),
+                    estimation: document.getElementById('estimation-indicator')
+                };
+
+                this.statusItems = {
+                    analysis: document.getElementById('analysis-status'),
+                    breakdown: document.getElementById('breakdown-status'),
+                    dependencies: document.getElementById('dependencies-status'),
+                    estimation: document.getElementById('estimation-status')
+                };
+            }
+
+            bindEvents() {
+                this.startBtn.addEventListener('click', () => this.startPlanning());
+
+                // Auto-resize textareas
+                [this.requirementsInput, this.contextInput].forEach(textarea => {
+                    textarea.addEventListener('input', (e) => {
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                    });
+                });
+            }
+
+            connectWebSocket() {
+                if (this.isConnecting) return;
+
+                this.isConnecting = true;
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+                try {
+                    this.ws = new WebSocket(wsUrl);
+
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.reconnectAttempts = 0;
+                        this.isConnecting = false;
+                        this.updateConnectionStatus(true);
+                        this.addLogMessage('Connected to planning server', 'info');
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (error) {
+                            console.error('Failed to parse WebSocket message:', error);
+                        }
+                    };
+
+                    this.ws.onclose = (event) => {
+                        console.log('WebSocket disconnected', event.code, event.reason);
+                        this.isConnecting = false;
+                        this.updateConnectionStatus(false);
+                        if (event.code !== 1000) {
+                            this.attemptReconnect();
+                        }
+                    };
+
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.isConnecting = false;
+                        this.updateConnectionStatus(false);
+                    };
+
+                } catch (error) {
+                    console.error('Failed to connect WebSocket:', error);
+                    this.isConnecting = false;
+                    this.updateConnectionStatus(false);
+                    this.attemptReconnect();
+                }
+            }
+
+            attemptReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts && !this.isConnecting) {
+                    this.reconnectAttempts++;
+                    console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+                    setTimeout(() => {
+                        this.connectWebSocket();
+                    }, this.reconnectInterval);
+                } else if (!this.isConnecting) {
+                    this.addLogMessage('Failed to connect to server. Please refresh the page.', 'error');
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                if (connected) {
+                    this.connectionStatus.textContent = '🟢 Connected';
+                    this.connectionStatus.className = 'connection-status connected';
+                } else {
+                    this.connectionStatus.textContent = '🔴 Disconnected';
+                    this.connectionStatus.className = 'connection-status disconnected';
+                }
+            }
+
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'planning_started':
+                        this.handlePlanningStarted(data);
+                        break;
+                    case 'progress':
+                        this.updateProgress(data);
+                        break;
+                    case 'planning_completed':
+                        this.handlePlanningCompleted(data);
+                        break;
+                    case 'task_updated':
+                        this.handleTaskUpdated(data);
+                        break;
+                    case 'error':
+                        this.handleError(data);
+                        break;
+                    default:
+                        this.addLogMessage(data.message || 'Unknown message type', 'info');
+                }
+            }
+
+            startPlanning() {
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.addLogMessage('Failed to initiate planning. Please check the connection.', 'error');
+                    alert('Failed to send planning request. Ensure you are connected to the server.');
+                    return;
+                }
+                this.clearLogs();
+                this.resetProgress();
+                this.hideResults();
+                this.startBtn.disabled = true;
+                this.startBtn.innerHTML = '⏳ Planning...';
+
+                const requirements = this.requirementsInput.value.trim();
+                const context = this.contextInput.value.trim();
+
+                if (!requirements) {
+                    this.addLogMessage('Project requirements are required.', 'error');
+                    alert('Please enter project requirements.');
+                    this.startBtn.disabled = false;
+                    this.startBtn.innerHTML = '🚀 Start Planning';
+                    return;
+                }
+
+                const payload = {
+                    type: 'start_planning',
+                    requirements,
+                    context
+                };
+
+                this.ws.send(JSON.stringify(payload));
+                this.addLogMessage('Planning request sent to server.', 'info');
+            }
+
+            handlePlanningStarted(data) {
+                this.addLogMessage(data.message, 'info');
+            }
+
+            updateProgress(data) {
+                this.progressFill.style.width = `${data.progress}%`;
+                this.progressText.textContent = data.message;
+                this.addLogMessage(`[${data.progress}%] ${data.message}`, 'info');
+
+                // Update status indicators
+                const steps = ['analysis', 'breakdown', 'dependencies', 'estimation', 'generation'];
+                const currentStepIndex = steps.indexOf(data.step);
+
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+                    if (this.statusItems[step]) {
+                        this.statusItems[step].classList.remove('active', 'completed');
+                        this.statusIndicators[step].className = 'status-indicator';
+                        
+                        if (i < currentStepIndex) {
+                            this.statusItems[step].classList.add('completed');
+                            this.statusIndicators[step].classList.add('completed');
+                        } else if (i === currentStepIndex) {
+                            this.statusItems[step].classList.add('active');
+                            this.statusIndicators[step].classList.add('pending');
+                        }
+                    }
+                }
+            }
+
+            handlePlanningCompleted(data) {
+                this.currentPlan = data.plan;
+                this.updateProgress({ progress: 100, message: data.message, step: 'generation' });
+                this.addLogMessage('✅ Planning successfully completed!', 'info');
+                this.renderPlan(this.currentPlan);
+
+                this.startBtn.disabled = false;
+                this.startBtn.innerHTML = '🚀 Start Planning';
+            }
+
+            handleTaskUpdated(data) {
+                if (!this.currentPlan) return;
+
+                const task = this.currentPlan.tasks.find(t => t.id === data.task_id);
+                if (task) {
+                    task.status = data.status;
+                    this.addLogMessage(`Task '${task.title}' updated to ${data.status}`, 'info');
+                    this.renderPlan(this.currentPlan); // Re-render the entire plan
+                }
+            }
+
+            handleError(data) {
+                this.addLogMessage(`Error: ${data.error}`, 'error');
+                this.progressText.textContent = `Error: ${data.error}`;
+                
+                // Find the active status item and mark it as an error
+                const activeStatus = document.querySelector('.status-item.active');
+                if (activeStatus) {
+                    activeStatus.classList.add('error');
+                    activeStatus.querySelector('.status-indicator').classList.add('error');
+                }
+                
+                this.startBtn.disabled = false;
+                this.startBtn.innerHTML = '🚀 Start Planning';
+            }
+
+            addLogMessage(message, type = 'log') {
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${type}`;
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                this.logsContainer.appendChild(logEntry);
+                this.logsContainer.scrollTop = this.logsContainer.scrollHeight; // Auto-scroll
+            }
+
+            clearLogs() {
+                this.logsContainer.innerHTML = '';
+            }
+
+            resetProgress() {
+                this.progressFill.style.width = '0%';
+                this.progressText.textContent = 'Ready to start planning';
+                for (const key in this.statusItems) {
+                    this.statusItems[key].classList.remove('active', 'completed', 'error');
+                    this.statusIndicators[key].className = 'status-indicator';
+                }
+            }
+            
+            hideResults() {
+                this.planSummarySection.style.display = 'none';
+                this.tasksSection.style.display = 'none';
+            }
+            
+            renderPlan(plan) {
+                this.renderSummary(plan);
+                this.renderTasks(plan.tasks);
+                this.planSummarySection.style.display = 'block';
+                this.tasksSection.style.display = 'block';
+            }
+            
+            renderSummary(plan) {
+                const stats = {
+                    total: plan.tasks.length,
+                    pending: plan.tasks.filter(t => t.status === 'pending').length,
+                    in_progress: plan.tasks.filter(t => t.status === 'in_progress').length,
+                    completed: plan.tasks.filter(t => t.status === 'completed').length,
+                };
+                
+                this.summaryStats.innerHTML = `
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.total}</div>
+                        <div class="stat-label">Total Tasks</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #ffc107;">${stats.pending}</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #17a2b8;">${stats.in_progress}</div>
+                        <div class="stat-label">In Progress</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #28a745;">${stats.completed}</div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                `;
+            }
+            
+            renderTasks(tasks) {
+                this.tasksGrid.innerHTML = '';
+                if (tasks.length === 0) {
+                    this.tasksGrid.innerHTML = '<p>No tasks were generated for this plan.</p>';
+                    return;
+                }
+                
+                tasks.forEach(task => {
+                    const taskCard = this.createTaskCard(task);
+                    this.tasksGrid.appendChild(taskCard);
+                });
+            }
+            
+            createTaskCard(task) {
+                const card = document.createElement('div');
+                card.className = `task-card ${task.status.replace('_', '-')}`;
+                card.id = `task-${task.id}`;
+                
+                const priorityClass = (task.priority || 'medium').toLowerCase();
+                
+                card.innerHTML = `
+                    <div class="task-header">
+                        <h3 class="task-title">${task.title}</h3>
+                        <span class="task-priority ${priorityClass}">${task.priority || 'Medium'}</span>
+                    </div>
+                    <p class="task-description">${task.description}</p>
+                    <div class="task-meta">
+                        <span><strong>Status:</strong> ${task.status.replace('_', ' ')}</span>
+                        <span><strong>Agent:</strong> ${task.agent_type || 'Any'}</span>
+                    </div>
+                    ${task.dependencies.length > 0 ? `<div class="task-dependencies" style="margin-top: 10px; font-size: 12px;"><strong>Dependencies:</strong> ${task.dependencies.join(', ')}</div>` : ''}
+                `;
+                
+                return card;
+            }
+        }
+
+        // Initialize the dashboard on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            new PlanningDashboard();
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Auto-generated requirements
+fastapi>=0.113.0,<0.114.0
+uvicorn[standard]>=0.23.0
+openai>=1.0.0
+anthropic>=0.25.0
+PyGitHub>=1.59.1
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+pathlib2>=2.3.7
+langchain>=0.1.0 
+azure-ai-inference
+fastapi
+uvicorn[standard]
+python-dotenv
+azure-ai-inference
+azure-core
+pygments
+requests>=2.31.0
+urllib3>=2.2.1
+
+# Typing and data classes are built-in for Python 3.7+, but to ensure compatibility:
+typing-extensions>=4.5.0
+dataclasses; python_version < '3.7'
+streamlit
+google-generativeai

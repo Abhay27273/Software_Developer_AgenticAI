@@ -1,122 +1,364 @@
 <!DOCTYPE html>
 <html lang="en">
-<meta charset="UTF-8">
+
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chatbot & Code Viewer</title>
-    <!-- Inter font from Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Prism.js for syntax highlighting - using a light theme -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
-    <!-- Optional: Prism.js line numbers plugin for better code viewing -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
-    <!-- Font Awesome for icons (copy, download) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>AI Development Studio</title>
+
+    <!-- Modern fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+
+    <!-- Prism.js for advanced syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css"
+        rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css"
+        rel="stylesheet" />
+
+    <!-- Modern icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+        rel="stylesheet">
 
     <style>
-        /* CSS Variables for consistent theming */
+        /* Modern CSS Variables - Claude/Gemini inspired */
         :root {
-            --bg-color: #f8f9fa; /* Overall light background */
-            --sidebar-bg: #ffffff; /* White sidebar */
-            --main-bg: #f8f9fa; /* Main content background */
-            --border-color: #e0e0e0; /* Subtle border */
-            --text-primary: #212529; /* Dark text for contrast */
-            --text-secondary: #6c757d; /* Muted secondary text */
-            --accent-color: #4a90e2; /* A clean, modern blue */
-            --accent-hover: #3a7bd5; /* Darker blue on hover */
-            --button-bg-secondary: #e9ecef; /* Light grey for secondary buttons */
-            --button-text-secondary: #343a40; /* Dark text for secondary buttons */
-            --button-hover-secondary: #dae0e5; /* Lighter grey on hover */
-            --chat-user-bg: #e6f0fa; /* Light blue for user messages */
-            --chat-ai-bg: #ffffff; /* White for AI messages */
-            --shadow-light: 0 1px 4px rgba(0, 0, 0, 0.06); /* Very subtle shadow */
-            --shadow-medium: 0 3px 10px rgba(0, 0, 0, 0.1); /* Medium shadow */
-            --log-info: #28a745; /* Green for info */
-            --log-warning: #ffc107; /* Yellow for warning */
-            --log-error: #dc3545; /* Red for error */
-            --font-primary: 'Inter', sans-serif;
-            --font-monospace: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-            --border-radius-sm: 4px;
-            --border-radius-md: 8px;
-            --border-radius-lg: 12px;
-            /* Agent Status Colors */
-            --status-idle: #6c757d; /* Grey */
-            --status-running: #4a90e2; /* Blue */
-            --status-error: #dc3545; /* Red */
-            --status-complete: #28a745; /* Green */
+            /* Color Palette */
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #262626;
+            --bg-canvas: #1e1e1e;
+            --bg-code: #0d1117;
+
+            --surface-primary: #2a2a2a;
+            --surface-secondary: #333333;
+            --surface-hover: #404040;
+
+            --border-primary: #404040;
+            --border-secondary: #525252;
+            --border-accent: #0ea5e9;
+
+            --text-primary: #ffffff;
+            --text-secondary: #a3a3a3;
+            --text-muted: #737373;
+            --text-accent: #0ea5e9;
+
+            --accent-primary: #0ea5e9;
+            --accent-secondary: #06b6d4;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+
+            /* Gradients */
+            --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            --gradient-surface: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+            --gradient-code: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+
+            /* Typography */
+            --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+
+            /* Spacing */
+            --space-xs: 0.25rem;
+            --space-sm: 0.5rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+
+            /* Border Radius */
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+
+            /* Transitions */
+            --transition-fast: 0.15s ease-out;
+            --transition-normal: 0.25s ease-out;
+            --transition-slow: 0.35s ease-out;
         }
-        /* Base styles */
+
+        /* Modern Base Styles */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
+        *::selection {
+            background: var(--accent-primary);
+            color: white;
+        }
+
         body {
             font-family: var(--font-primary);
-            background-color: var(--bg-color);
+            background: var(--bg-primary);
             color: var(--text-primary);
             height: 100vh;
-            overflow: hidden; /* Prevent body scrollbar */
-            display: flex;
-            flex-direction: column;
-            padding: 15px; /* Added padding to body */
+            overflow: hidden;
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
-        /* App Container */
+
+        /* Modern App Container */
         .app-container {
             display: flex;
-            flex: 1;
-            background-color: var(--main-bg);
-            border-radius: var(--border-radius-lg);
-            overflow: hidden; /* Ensure content inside doesn't cause app-container to scroll */
-            /* Removed margin: 15px; */
-            box-shadow: var(--shadow-medium);
+            height: 100vh;
+            background: var(--bg-primary);
+            position: relative;
         }
-        /* --- Left Sidebar --- */
+
+        /* Modern Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-primary);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-secondary);
+        }
+
+        /* Modern Sidebar */
         .left-sidebar {
-            width: 280px;
-            background-color: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            padding: 20px;
+            width: 320px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-primary);
             display: flex;
             flex-direction: column;
-            gap: 25px;
-            overflow-y: auto; /* Allow sidebar content to scroll */
             flex-shrink: 0;
+            position: relative;
         }
+
         .sidebar-header {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 10px;
+            padding: var(--space-lg);
+            border-bottom: 1px solid var(--border-primary);
+            background: var(--gradient-surface);
+        }
+
+        .logo-container {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
         }
-        .sidebar-header .logo-icon {
-            font-size: 24px;
-            color: var(--accent-color);
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
         }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.025em;
+        }
+
+        .project-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--surface-primary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-primary);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-lg);
+        }
+
         .sidebar-section {
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--space-xl);
         }
+
         .sidebar-section:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
+            margin-bottom: 0;
         }
-        .sidebar-section h3 {
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-md);
+        }
+
+        .section-title {
             font-size: 13px;
             font-weight: 600;
             color: var(--text-secondary);
-            margin-bottom: 15px;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.05em;
         }
-        .session-list, .file-tree {
+
+        .section-action {
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            transition: color var(--transition-fast);
+        }
+
+        .section-action:hover {
+            color: var(--accent-primary);
+        }
+
+        /* Modern File Tree */
+        .file-tree {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 13px;
+            position: relative;
+        }
+
+        .file-item:hover {
+            background: var(--surface-primary);
+            color: var(--text-primary);
+        }
+
+        .file-item.selected {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .file-item.selected::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 16px;
+            background: white;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .file-icon {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: var(--space-xs);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+
+        .file-item:hover .file-actions {
+            opacity: 1;
+        }
+
+        .file-action {
+            width: 20px;
+            height: 20px;
+            border-radius: var(--radius-sm);
+            background: var(--surface-secondary);
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            transition: all var(--transition-fast);
+        }
+
+        .file-action:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
+        .session-list,
+        .file-tree {
             display: flex;
             flex-direction: column;
             gap: 6px;
         }
-        .session-item, .file-item {
+
+        .session-item,
+        .file-item {
             padding: 10px 15px;
             border-radius: var(--border-radius-md);
             cursor: pointer;
@@ -127,21 +369,28 @@
             gap: 10px;
             color: var(--text-secondary);
         }
-        .session-item:hover, .file-item:hover {
+
+        .session-item:hover,
+        .file-item:hover {
             background-color: var(--button-bg-secondary);
             color: var(--text-primary);
         }
+
         .session-item.active {
             background-color: var(--accent-color);
             color: white;
             font-weight: 500;
             box-shadow: var(--shadow-light);
         }
+
         .file-item.selected {
-            background-color: #e0f0ff; /* Lighter accent background */
-            color: var(--accent-color); /* Accent color for text */
+            background-color: #e0f0ff;
+            /* Lighter accent background */
+            color: var(--accent-color);
+            /* Accent color for text */
             font-weight: 500;
         }
+
         /* Project Name Editing */
         .project-name-display {
             display: flex;
@@ -151,15 +400,18 @@
             color: var(--text-primary);
             cursor: pointer;
         }
+
         .project-name-display .edit-icon {
             font-size: 14px;
             color: var(--text-secondary);
             opacity: 0.7;
             transition: opacity 0.2s;
         }
+
         .project-name-display:hover .edit-icon {
             opacity: 1;
         }
+
         .project-name-input {
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-sm);
@@ -168,6 +420,7 @@
             font-family: var(--font-primary);
             outline: none;
         }
+
         /* New Project/Clear Chat Button */
         #new-project-btn {
             background-color: var(--button-bg-secondary);
@@ -185,35 +438,45 @@
             gap: 8px;
             width: 100%;
         }
+
         #new-project-btn:hover {
             background-color: var(--button-hover-secondary);
             box-shadow: var(--shadow-light);
         }
+
         /* File Tree Specifics */
-        .file-tree .directory > .file-item {
+        .file-tree .directory>.file-item {
             font-weight: 600;
             color: var(--text-primary);
             cursor: pointer;
         }
-        .file-tree .directory > .file-item .icon-folder {
+
+        .file-tree .directory>.file-item .icon-folder {
             transition: transform 0.2s ease-in-out;
-            margin-right: 5px; /* Space between icon and text */
+            margin-right: 5px;
+            /* Space between icon and text */
         }
+
         .file-tree .file-item .icon-file {
-            margin-right: 5px; /* Space between icon and text */
+            margin-right: 5px;
+            /* Space between icon and text */
         }
-        .file-tree .directory.collapsed > .file-item .icon-folder {
+
+        .file-tree .directory.collapsed>.file-item .icon-folder {
             transform: rotate(-90deg);
         }
+
         .file-tree .directory .children-container {
             padding-left: 20px;
             display: flex;
             flex-direction: column;
             gap: 6px;
         }
+
         .file-tree .directory.collapsed .children-container {
             display: none;
         }
+
         /* Context Menu */
         #context-menu {
             position: fixed;
@@ -226,6 +489,7 @@
             flex-direction: column;
             padding: 5px 0;
         }
+
         .context-menu-item {
             padding: 8px 15px;
             font-size: 14px;
@@ -236,134 +500,454 @@
             align-items: center;
             gap: 10px;
         }
+
         .context-menu-item:hover {
             background-color: var(--button-bg-secondary);
         }
+
         .context-menu-item i {
-            width: 18px; /* Align icons */
+            width: 18px;
+            /* Align icons */
             text-align: center;
         }
-        /* --- Main Content (Chatbot Area & File Viewer Container) --- */
+
+        /* Modern Main Content Area */
         .main-content {
             flex: 1;
-            display: flex; /* Make it a flex container */
-            flex-direction: column; /* Stack children vertically */
-            background-color: var(--main-bg);
-            padding: 30px 50px 20px 50px; /* Adjusted padding: top, right, bottom (less), left */
-            overflow: hidden; /* Main content itself should not scroll */
-        }
-        /* Content Area for Chat/Agent/File Viewer */
-        .content-area {
-            flex: 1; /* Takes all available vertical space */
-            display: flex; /* Default to column for single view */
+            display: flex;
             flex-direction: column;
-            overflow-y: auto; /* Allow this area to scroll */
-            position: relative; /* For absolute positioning of sub-panels if needed */
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
         }
+
+        /* Top Navigation Bar */
+        .top-nav {
+            height: 60px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-lg);
+            flex-shrink: 0;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: var(--space-lg);
+        }
+
+        .nav-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .nav-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .nav-button {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--surface-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .nav-button:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+            border-color: var(--border-secondary);
+        }
+
+        .nav-button.primary {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .nav-button.primary:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Modern Canvas-like Content Area */
+        .content-area {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Chat Panel - Left Side */
+        .chat-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-primary);
+        }
+
+        .chat-header {
+            height: 50px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            padding: 0 var(--space-lg);
+            flex-shrink: 0;
+        }
+
+        .chat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .chat-title i {
+            color: var(--accent-primary);
+        }
+
+        /* Code Canvas - Right Side */
+        .code-canvas {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-canvas);
+            position: relative;
+        }
+
+        .canvas-header {
+            height: 50px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-lg);
+            flex-shrink: 0;
+        }
+
+        .canvas-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .canvas-title i {
+            color: var(--accent-secondary);
+        }
+
+        .canvas-actions {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .canvas-button {
+            width: 32px;
+            height: 32px;
+            background: var(--surface-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .canvas-button:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+            border-color: var(--border-secondary);
+        }
+
+        .canvas-button.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
         /* Split view styles for content-area */
         .content-area.split-active {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* Two equal columns */
-            gap: 30px; /* Space between chat and file viewer */
-            overflow-y: hidden; /* Content area itself doesn't scroll, children do */
+            grid-template-columns: 1fr 1fr;
+            /* Two equal columns */
+            gap: 30px;
+            /* Space between chat and file viewer */
+            overflow-y: hidden;
+            /* Content area itself doesn't scroll, children do */
         }
+
         /* Hide welcome view in split mode */
         .content-area.split-active .welcome-view {
             display: none !important;
         }
+
         /* Chat Panel & Agent Output Panel in split view - these will be in the left column */
         .content-area.split-active .chat-panel,
         .content-area.split-active .agent-output-panel {
-            display: flex; /* Ensure it's visible if active */
+            display: flex;
+            /* Ensure it's visible if active */
             flex-direction: column;
-            overflow-y: auto; /* Allow content to scroll within its column */
-            max-width: none; /* Remove centering/max-width */
+            overflow-y: auto;
+            /* Allow content to scroll within its column */
+            max-width: none;
+            /* Remove centering/max-width */
             margin: 0;
-            padding: 0; /* Reset padding from default .main-content */
-            height: 100%; /* Take full height of grid cell */
+            padding: 0;
+            /* Reset padding from default .main-content */
+            height: 100%;
+            /* Take full height of grid cell */
         }
+
         /* File Viewer Panel in split view - this will be in the right column */
         .content-area.split-active .file-viewer-panel {
-            position: static; /* Place it in the grid, no longer absolute overlay */
-            display: flex; /* Make it visible and take its place in the grid */
+            position: static;
+            /* Place it in the grid, no longer absolute overlay */
+            display: flex;
+            /* Make it visible and take its place in the grid */
             flex-direction: column;
-            padding: 0; /* Remove padding here, handled by main-content container */
-            overflow-y: hidden; /* Content inside pre/code will scroll */
-            height: 100%; /* Take full height of grid cell */
-            border-left: 1px solid var(--border-color); /* Thin line separator */
-            padding-left: 30px; /* Space after the separator */
+            padding: 0;
+            /* Remove padding here, handled by main-content container */
+            overflow-y: hidden;
+            /* Content inside pre/code will scroll */
+            height: 100%;
+            /* Take full height of grid cell */
+            border-left: 1px solid var(--border-color);
+            /* Thin line separator */
+            padding-left: 30px;
+            /* Space after the separator */
         }
+
         /* Chat History - always scrollable within its panel */
         .chat-history {
             flex: 1;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            max-width: 800px; /* Limit chat width in single view */
-            margin: 0 auto; /* Center chat content in single view */
+            max-width: 800px;
+            /* Limit chat width in single view */
+            margin: 0 auto;
+            /* Center chat content in single view */
             width: 100%;
-            padding-top: 20px; /* Padding above first message */
-            padding-bottom: 20px; /* Padding below last message */
-            overflow-y: auto; /* Always scrollable */
+            padding-top: 20px;
+            /* Padding above first message */
+            padding-bottom: 20px;
+            /* Padding below last message */
+            overflow-y: auto;
+            /* Always scrollable */
         }
+
         /* Chat History in split view - remove max-width and margin auto */
         .content-area.split-active .chat-history {
             max-width: none;
             margin: 0;
-            padding: 0; /* Reset internal padding if main-content has it */
+            padding: 0;
+            /* Reset internal padding if main-content has it */
         }
+
         /* Agent Output Panel */
         .agent-output-panel {
-            flex: 1; /* Takes available space */
+            flex: 1;
+            /* Takes available space */
             display: flex;
             flex-direction: column;
             gap: 20px;
-            max-width: 800px; /* Limit width in single view */
-            margin: 0 auto; /* Center in single view */
+            max-width: 800px;
+            /* Limit width in single view */
+            margin: 0 auto;
+            /* Center in single view */
             width: 100%;
             padding-top: 20px;
             padding-bottom: 20px;
-            overflow-y: auto; /* Always scrollable */
+            overflow-y: auto;
+            /* Always scrollable */
         }
+
         .agent-output-content {
             font-family: var(--font-monospace);
             font-size: 14px;
             line-height: 1.6;
             white-space: pre-wrap;
-            background-color: #f0f2f5; /* Slightly darker background for output */
+            background-color: #f0f2f5;
+            /* Slightly darker background for output */
             border: 1px solid var(--border-color);
             padding: 20px;
             border-radius: var(--border-radius-md);
             color: var(--text-primary);
-            min-height: 150px; /* More substantial min-height */
+            min-height: 150px;
+            /* More substantial min-height */
             overflow-y: auto;
-            box-shadow: var(--shadow-light); /* Subtle shadow */
+            box-shadow: var(--shadow-light);
+            /* Subtle shadow */
         }
+
+        /* Modern Chat Messages */
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+
         .chat-message {
             display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            padding: 15px;
-            border-radius: var(--border-radius-md);
-            box-shadow: var(--shadow-light);
-            line-height: 1.6;
-            font-size: 15px;
-            white-space: pre-wrap; /* Preserve formatting */
-            word-break: break-word; /* Break long words */
+            gap: var(--space-md);
+            max-width: 85%;
+            animation: slideIn 0.3s ease-out;
         }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .chat-message.user {
-            background-color: var(--chat-user-bg);
-            align-self: flex-end; /* Align user messages to the right */
-            margin-left: auto; /* Push to right */
-            border-bottom-right-radius: 0; /* Pointy corner for user */
+            align-self: flex-end;
+            flex-direction: row-reverse;
         }
+
         .chat-message.ai {
-            background-color: var(--chat-ai-bg);
-            align-self: flex-start; /* Align AI messages to the left */
-            margin-right: auto; /* Push to left */
-            border-bottom-left-radius: 0; /* Pointy corner for AI */
-            border: 1px solid var(--border-color); /* Subtle border for AI messages */
+            align-self: flex-start;
         }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message-avatar.user {
+            background: var(--gradient-primary);
+            color: white;
+        }
+
+        .message-avatar.ai {
+            background: var(--surface-primary);
+            color: var(--accent-primary);
+            border: 1px solid var(--border-primary);
+        }
+
+        .message-content {
+            background: var(--surface-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md) var(--space-lg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            position: relative;
+        }
+
+        .chat-message.user .message-content {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .message-content::before {
+            content: '';
+            position: absolute;
+            top: 12px;
+            width: 0;
+            height: 0;
+            border: 6px solid transparent;
+        }
+
+        .chat-message.ai .message-content::before {
+            left: -12px;
+            border-right-color: var(--surface-primary);
+        }
+
+        .chat-message.user .message-content::before {
+            right: -12px;
+            border-left-color: var(--accent-primary);
+        }
+
+        /* Modern Code Blocks in Chat */
+        .message-content pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin: var(--space-md) 0;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .message-content code {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .copy-code-btn {
+            position: absolute;
+            top: var(--space-sm);
+            right: var(--space-sm);
+            background: var(--surface-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-sm);
+            padding: var(--space-xs) var(--space-sm);
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0;
+            transition: all var(--transition-fast);
+        }
+
+        .message-content pre:hover .copy-code-btn {
+            opacity: 1;
+        }
+
+        .copy-code-btn:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
         .chat-avatar {
             width: 35px;
             height: 35px;
@@ -377,8 +961,17 @@
             font-size: 18px;
             flex-shrink: 0;
         }
-        .chat-avatar.user { background-color: #6c757d; } /* Muted grey for user avatar */
-        .chat-avatar.ai { background-color: var(--accent-color); } /* Accent for AI avatar */
+
+        .chat-avatar.user {
+            background-color: #6c757d;
+        }
+
+        /* Muted grey for user avatar */
+        .chat-avatar.ai {
+            background-color: var(--accent-color);
+        }
+
+        /* Accent for AI avatar */
         /* Typing Indicator */
         .typing-indicator {
             display: flex;
@@ -387,8 +980,10 @@
             font-size: 14px;
             color: var(--text-secondary);
             margin-top: 10px;
-            margin-left: 60px; /* Align with AI messages */
+            margin-left: 60px;
+            /* Align with AI messages */
         }
+
         .typing-indicator span {
             display: inline-block;
             width: 8px;
@@ -397,24 +992,179 @@
             border-radius: 50%;
             animation: bounce 1.4s infinite ease-in-out both;
         }
-        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0s; }
+
+        .typing-indicator span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0s;
+        }
+
         @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
         }
-        /* --- Input Form Area --- */
+
+        /* Modern Input Area */
         .input-area-container {
-            /* No longer absolutely positioned relative to main-content */
-            position: static; /* Or simply remove position property */
-            flex-shrink: 0; /* Prevents it from shrinking */
-            margin-top: auto; /* Pushes it to the bottom of the flex container */
-            padding: 20px 50px; /* Consistent padding */
-            background: var(--main-bg); /* Solid background for simpler layout */
-            z-index: 10;
-            border-top: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-primary);
+            padding: var(--space-lg);
+            flex-shrink: 0;
         }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .input-container {
+            background: var(--surface-primary);
+            border: 2px solid var(--border-primary);
+            border-radius: var(--radius-xl);
+            padding: var(--space-md);
+            transition: all var(--transition-fast);
+            position: relative;
+        }
+
+        .input-container:focus-within {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        .input-row {
+            display: flex;
+            align-items: flex-end;
+            gap: var(--space-md);
+        }
+
+        .input-field {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: var(--font-primary);
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            min-height: 24px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .input-field::placeholder {
+            color: var(--text-muted);
+        }
+
+        .send-button {
+            width: 40px;
+            height: 40px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-lg);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+            flex-shrink: 0;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .input-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border-primary);
+        }
+
+        .agent-selector {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .agent-chip {
+            padding: var(--space-xs) var(--space-md);
+            background: var(--surface-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .agent-chip:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
+        .agent-chip.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .agent-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .agent-chip.active .agent-status-dot {
+            background: white;
+        }
+
+        .input-shortcuts {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .shortcut-key {
+            padding: 2px 6px;
+            background: var(--surface-secondary);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+
         .input-wrapper {
             max-width: 800px;
             margin: 0 auto;
@@ -424,32 +1174,41 @@
             padding: 15px;
             box-shadow: var(--shadow-medium);
             display: flex;
-            flex-direction: column; /* Stack input and tabs */
+            flex-direction: column;
+            /* Stack input and tabs */
             gap: 10px;
         }
+
         .input-top-row {
             display: flex;
             align-items: center;
             gap: 10px;
         }
+
         #requirements-input {
-            flex: 1; /* Take remaining space */
+            flex: 1;
+            /* Take remaining space */
             border: none;
             padding: 10px;
             font-size: 16px;
             font-family: var(--font-primary);
             resize: none;
-            min-height: 50px; /* Adjusted min-height */
-            max-height: 150px; /* Limit max height for input */
+            min-height: 50px;
+            /* Adjusted min-height */
+            max-height: 150px;
+            /* Limit max height for input */
             outline: none;
             background: transparent;
             color: var(--text-primary);
-            overflow-y: auto; /* Allow scrolling for long input */
+            overflow-y: auto;
+            /* Allow scrolling for long input */
         }
+
         #requirements-input::placeholder {
             color: var(--text-secondary);
             opacity: 0.8;
         }
+
         #send-message-btn {
             padding: 10px 20px;
             border: none;
@@ -465,25 +1224,34 @@
             align-items: center;
             gap: 8px;
         }
+
         #send-message-btn:hover:not(:disabled) {
             background-color: var(--accent-hover);
             box-shadow: var(--shadow-medium);
         }
+
         #send-message-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             background-color: #a0c9f0;
             box-shadow: none;
         }
+
         .agent-tabs {
             display: flex;
-            gap: 10px; /* Space between tabs */
-            flex-wrap: wrap; /* Allow tabs to wrap on smaller screens */
-            justify-content: flex-start; /* Align tabs to the left */
-            margin-top: 5px; /* Small space above tabs */
+            gap: 10px;
+            /* Space between tabs */
+            flex-wrap: wrap;
+            /* Allow tabs to wrap on smaller screens */
+            justify-content: flex-start;
+            /* Align tabs to the left */
+            margin-top: 5px;
+            /* Small space above tabs */
         }
+
         .agent-tab {
-            padding: 8px 18px; /* More horizontal padding */
+            padding: 8px 18px;
+            /* More horizontal padding */
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-md);
             cursor: pointer;
@@ -496,16 +1264,19 @@
             align-items: center;
             gap: 6px;
         }
+
         .agent-tab:hover:not(.active):not(.disabled) {
             background-color: var(--button-hover-secondary);
             border-color: #c9d2da;
         }
+
         .agent-tab.active {
             background-color: var(--accent-color);
             color: white;
             border-color: var(--accent-color);
             box-shadow: var(--shadow-light);
         }
+
         .agent-tab.disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -513,6 +1284,7 @@
             color: #a0a0a0;
             border-color: #e0e0e0;
         }
+
         /* Agent Status Indicator Dot */
         .agent-status-dot {
             width: 8px;
@@ -521,32 +1293,159 @@
             background-color: var(--status-idle);
             transition: background-color 0.3s;
         }
-        .agent-status-dot.running { background-color: var(--status-running); }
-        .agent-status-dot.complete { background-color: var(--status-complete); }
-        .agent-status-dot.error { background-color: var(--status-error); }
-        /* File Viewer Panel Styles */
-        /* Default state: hidden and overlaying content-area */
-        .file-viewer-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: var(--main-bg);
-            z-index: 20;
+
+        .agent-status-dot.running {
+            background-color: var(--status-running);
+        }
+
+        .agent-status-dot.complete {
+            background-color: var(--status-complete);
+        }
+
+        .agent-status-dot.error {
+            background-color: var(--status-error);
+        }
+
+        /* Modern Code Canvas Content */
+        .canvas-content {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 30px 50px;
+            overflow: hidden;
         }
+
+        .canvas-tabs {
+            display: flex;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+
+        .canvas-tab {
+            padding: var(--space-md) var(--space-lg);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .canvas-tab:hover {
+            color: var(--text-primary);
+            background: var(--surface-primary);
+        }
+
+        .canvas-tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+            background: var(--bg-canvas);
+        }
+
+        .canvas-tab .close-btn {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--surface-primary);
+            border: none;
+            color: var(--text-muted);
+            font-size: 10px;
+            cursor: pointer;
+            opacity: 0;
+            transition: all var(--transition-fast);
+        }
+
+        .canvas-tab:hover .close-btn {
+            opacity: 1;
+        }
+
+        .canvas-tab .close-btn:hover {
+            background: var(--accent-error);
+            color: white;
+        }
+
+        .code-editor {
+            flex: 1;
+            background: var(--bg-code);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .code-content {
+            height: 100%;
+            overflow: auto;
+            padding: var(--space-lg);
+        }
+
+        .code-content pre {
+            margin: 0;
+            background: transparent;
+            border: none;
+            padding: 0;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .code-content code {
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+        }
+
+        /* Code Editor Toolbar */
+        .code-toolbar {
+            position: absolute;
+            top: var(--space-md);
+            right: var(--space-md);
+            display: flex;
+            gap: var(--space-sm);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+
+        .code-editor:hover .code-toolbar {
+            opacity: 1;
+        }
+
+        .toolbar-btn {
+            width: 32px;
+            height: 32px;
+            background: var(--surface-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+        }
+
+        .toolbar-btn:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
         /* In split view, it becomes static within the grid */
         .content-area.split-active .file-viewer-panel {
             position: static;
             display: flex;
             flex-direction: column;
-            padding: 0; /* Padding handled by content-area grid container */
+            padding: 0;
+            /* Padding handled by content-area grid container */
             overflow-y: hidden;
             height: 100%;
         }
+
         .file-viewer-header {
             display: flex;
             justify-content: space-between;
@@ -558,25 +1457,30 @@
             font-weight: 500;
             color: var(--text-primary);
         }
+
         #file-viewer-filename {
             font-family: var(--font-monospace);
             color: var(--text-secondary);
             font-size: 15px;
         }
+
         .file-viewer-actions button {
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 18px; /* Slightly smaller icons for file actions */
+            font-size: 18px;
+            /* Slightly smaller icons for file actions */
             color: var(--text-secondary);
             padding: 8px;
             border-radius: var(--border-radius-sm);
             transition: color 0.2s, background-color 0.2s;
         }
+
         .file-viewer-actions button:hover {
             color: var(--accent-color);
             background-color: #f0f0f0;
         }
+
         .file-viewer-content {
             flex: 1;
             background-color: #f0f2f5;
@@ -585,37 +1489,44 @@
             overflow: auto;
             box-shadow: var(--shadow-light);
         }
+
         .file-viewer-content pre {
             padding: 20px;
             margin: 0;
             white-space: pre-wrap;
             word-break: break-all;
         }
+
         .file-viewer-content code {
             font-family: var(--font-monospace);
             font-size: 14px;
             line-height: 1.6;
             color: #333;
         }
+
         /* Code Block Copy Button (inside chat messages) */
         .chat-message pre {
             position: relative;
-            background-color: #e9ecef; /* Light grey background for code */
+            background-color: #e9ecef;
+            /* Light grey background for code */
             padding: 15px;
             border-radius: var(--border-radius-md);
             margin-top: 10px;
-            overflow-x: auto; /* Allow horizontal scrolling for wide code */
+            overflow-x: auto;
+            /* Allow horizontal scrolling for wide code */
         }
+
         .chat-message pre code {
             font-size: 13px;
             line-height: 1.5;
             color: #333;
         }
+
         .chat-message .copy-code-btn {
             position: absolute;
             top: 5px;
             right: 5px;
-            background-color: rgba(0,0,0,0.4);
+            background-color: rgba(0, 0, 0, 0.4);
             color: white;
             border: none;
             border-radius: var(--border-radius-sm);
@@ -625,12 +1536,15 @@
             opacity: 0;
             transition: opacity 0.2s, background-color 0.2s;
         }
+
         .chat-message pre:hover .copy-code-btn {
             opacity: 1;
         }
+
         .chat-message .copy-code-btn:hover {
-            background-color: rgba(0,0,0,0.6);
+            background-color: rgba(0, 0, 0, 0.6);
         }
+
         /* Logs and Connection Status (Fixed position, ensure they are not duplicated in HTML) */
         #connection-status {
             position: fixed;
@@ -644,18 +1558,22 @@
             box-shadow: var(--shadow-light);
             transition: background-color 0.3s, color 0.3s;
         }
+
         #connection-status.connected {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
+
         #connection-status.disconnected {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+
         #logs-container {
-            display: none !important; /* HIDE THE LOGS PANEL */
+            display: none !important;
+            /* HIDE THE LOGS PANEL */
             position: fixed;
             bottom: 20px;
             right: 20px;
@@ -672,16 +1590,28 @@
             box-shadow: var(--shadow-medium);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+
         .log-entry {
             padding: 4px 0;
             border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
         }
+
         .log-entry:last-child {
             border-bottom: none;
         }
-        .log-info { color: var(--log-info); }
-        .log-warning { color: var(--log-warning); }
-        .log-error { color: var(--log-error); }
+
+        .log-info {
+            color: var(--log-info);
+        }
+
+        .log-warning {
+            color: var(--log-warning);
+        }
+
+        .log-error {
+            color: var(--log-error);
+        }
+
         /* Custom Message Box (replacing alert) */
         #custom-message-box {
             position: fixed;
@@ -700,6 +1630,7 @@
             text-align: center;
             border: 1px solid var(--border-color);
         }
+
         #custom-message-content {
             margin-bottom: 25px;
             font-size: 17px;
@@ -707,6 +1638,7 @@
             color: var(--text-primary);
             line-height: 1.5;
         }
+
         #custom-message-ok-btn {
             background-color: var(--accent-color);
             color: white;
@@ -719,70 +1651,93 @@
             transition: background-color 0.2s, box-shadow 0.2s;
             box-shadow: var(--shadow-light);
         }
+
         #custom-message-ok-btn:hover {
             background-color: var(--accent-hover);
             box-shadow: var(--shadow-medium);
         }
+
         /* Utility classes */
         .hidden {
             display: none !important;
         }
+
         /* Responsive Adjustments */
         @media (max-width: 1024px) {
             .app-container {
                 margin: 10px;
             }
+
             .left-sidebar {
                 width: 250px;
                 padding: 15px;
                 gap: 20px;
             }
+
             .main-content {
                 padding: 20px 30px;
             }
+
             .input-area-container {
                 padding: 15px 30px;
             }
+
             .input-wrapper {
                 padding: 12px;
             }
+
             #requirements-input {
                 font-size: 15px;
                 min-height: 40px;
             }
+
             #send-message-btn {
                 padding: 8px 15px;
                 font-size: 14px;
             }
-            .chat-history, .agent-output-panel {
+
+            .chat-history,
+            .agent-output-panel {
                 max-width: 600px;
             }
+
             .file-viewer-panel {
                 padding: 20px 30px;
             }
+
             #logs-container {
                 max-width: 300px;
                 max-height: 150px;
                 font-size: 11px;
             }
+
             #connection-status {
                 font-size: 13px;
                 padding: 6px 12px;
             }
+
             .content-area.split-active {
-                grid-template-columns: 1fr; /* Stack columns on smaller tablets */
+                grid-template-columns: 1fr;
+                /* Stack columns on smaller tablets */
                 gap: 20px;
-                overflow-y: auto; /* Allow scrolling for stacked content */
+                overflow-y: auto;
+                /* Allow scrolling for stacked content */
             }
+
             .content-area.split-active .chat-panel,
             .content-area.split-active .agent-output-panel,
             .content-area.split-active .file-viewer-panel {
-                height: auto; /* Auto height when stacked */
-                max-height: 50vh; /* Limit height of each panel */
-                border-left: none; /* Remove border when stacked */
-                padding-left: 0; /* Remove padding when stacked */
+                height: auto;
+                /* Auto height when stacked */
+                max-height: 50vh;
+                /* Limit height of each panel */
+                border-left: none;
+                /* Remove border when stacked */
+                padding-left: 0;
+                /* Remove padding when stacked */
             }
         }
+
         @media (max-width: 768px) {
             .app-container {
                 flex-direction: column;
@@ -790,6 +1745,7 @@
                 border-radius: 0;
                 box-shadow: none;
             }
+
             .left-sidebar {
                 width: 100%;
                 height: auto;
@@ -798,44 +1754,56 @@
                 padding-bottom: 15px;
                 max-height: 40vh;
             }
+
             .main-content {
                 flex: 1;
                 min-height: 60vh;
                 padding: 15px 20px;
             }
+
             .input-area-container {
                 padding: 10px 20px;
             }
+
             .input-wrapper {
                 flex-direction: column;
                 align-items: stretch;
                 padding: 10px;
             }
+
             .input-top-row {
                 flex-direction: column;
                 align-items: stretch;
                 gap: 10px;
             }
+
             #send-message-btn {
                 width: 100%;
                 justify-content: center;
             }
-            .chat-history, .agent-output-panel {
+
+            .chat-history,
+            .agent-output-panel {
                 gap: 15px;
             }
+
             .chat-message {
                 font-size: 14px;
                 padding: 12px;
             }
+
             .chat-avatar {
                 width: 30px;
                 height: 30px;
                 font-size: 16px;
             }
+
             .file-viewer-panel {
                 padding: 15px 20px;
             }
-            #logs-container, #connection-status {
+
+            #logs-container,
+            #connection-status {
                 position: static;
                 margin: 10px 20px;
                 max-width: none;
@@ -843,116 +1811,266 @@
                 box-shadow: var(--shadow-light);
                 border: 1px solid var(--border-color);
             }
+
             #connection-status {
                 text-align: center;
                 margin-top: 10px;
             }
+
             .content-area.split-active {
-                grid-template-columns: 1fr; /* Ensure stacking on mobile */
+                grid-template-columns: 1fr;
+                /* Ensure stacking on mobile */
             }
         }
     </style>
 </head>
+
 <body>
     <div class="app-container">
+        <!-- Modern Sidebar -->
         <aside class="left-sidebar">
             <div class="sidebar-header">
-                <span class="logo-icon"><i class="fas fa-robot"></i></span> AI Agent
-            </div>
-
-            <!-- Connection Status moved here for better integration -->
-            <div id="connection-status" class="connection-status">Connecting...</div>
-
-            <div class="sidebar-section">
-                <h3>Projects</h3>
-                <div id="session-list" class="session-list">
-                    <div class="session-item active">
-                        <span class="icon-file"><i class="fas fa-project-diagram"></i></span>
-                        <span id="current-project-name" class="project-name-display">
-                            <span>Current Project</span>
-                            <i class="fas fa-edit edit-icon"></i>
-                        </span>
+                <div class="logo-container">
+                    <div class="logo-icon">
+                        <i class="fas fa-code"></i>
                     </div>
+                    <div class="logo-text">AI Dev Studio</div>
                 </div>
-                <button id="new-project-btn"><i class="fas fa-plus-circle"></i> New Project / Clear Chat</button>
+                <div class="project-status">
+                    <div class="status-indicator"></div>
+                    <div class="status-text" id="connection-status">Ready</div>
+                </div>
             </div>
-            <div class="sidebar-section">
-                <h3>Generated Files</h3>
-                <div id="file-tree" class="file-tree">
-                    <!-- File tree will be dynamically populated by JS -->
+
+            <div class="sidebar-content">
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <div class="section-title">Project</div>
+                        <div class="section-action">
+                            <i class="fas fa-plus"></i>
+                        </div>
+                    </div>
+                    <div class="file-item selected">
+                        <div class="file-icon">
+                            <i class="fas fa-folder"></i>
+                        </div>
+                        <div class="file-name" id="current-project-name">Current Project</div>
+                        <div class="file-actions">
+                            <button class="file-action" title="Settings">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="new-project-btn" class="nav-button" style="width: 100%; margin-top: var(--space-md);">
+                        <i class="fas fa-plus"></i> New Project
+                    </button>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <div class="section-title">Generated Files</div>
+                        <div class="section-action" title="Refresh">
+                            <i class="fas fa-refresh"></i>
+                        </div>
+                    </div>
+                    <div id="file-tree" class="file-tree">
+                        <!-- File tree will be dynamically populated -->
+                    </div>
                 </div>
             </div>
         </aside>
 
+        <!-- Modern Main Content -->
         <main class="main-content">
-            <!-- New wrapper for scrollable content -->
+            <!-- Top Navigation -->
+            <div class="top-nav">
+                <div class="nav-left">
+                    <div class="nav-title">AI Development Studio</div>
+                    <div class="nav-breadcrumb">
+                        <span>Project</span>
+                        <i class="fas fa-chevron-right"></i>
+                        <span>Development</span>
+                    </div>
+                </div>
+                <div class="nav-right">
+                    <button class="nav-button">
+                        <i class="fas fa-history"></i>
+                        History
+                    </button>
+                    <button class="nav-button">
+                        <i class="fas fa-download"></i>
+                        Export
+                    </button>
+                    <button class="nav-button primary">
+                        <i class="fas fa-rocket"></i>
+                        Deploy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Canvas Content Area -->
             <div class="content-area">
-                <div id="welcome-view" class="welcome-view">
-                    <h1>Hello! How can I assist you today?</h1>
-                    <p>Describe your project requirements or ask a question to get started.</p>
-                </div>
-
-                <!-- Main Chat Panel -->
-                <div id="chat-panel" class="chat-panel">
+                <!-- Chat Panel -->
+                <div class="chat-panel">
+                    <div class="chat-header">
+                        <div class="chat-title">
+                            <i class="fas fa-comments"></i>
+                            Conversation
+                        </div>
+                    </div>
                     <div id="chat-history" class="chat-history">
-                        <!-- Chat messages will be dynamically added here -->
+                        <!-- Welcome message -->
+                        <div id="welcome-view" class="chat-message ai">
+                            <div class="message-avatar ai">AI</div>
+                            <div class="message-content">
+                                <h3>Welcome to AI Development Studio! 🚀</h3>
+                                <p>I'm your AI development assistant. I can help you:</p>
+                                <ul>
+                                    <li>Plan and architect software projects</li>
+                                    <li>Generate production-ready code</li>
+                                    <li>Test and quality assurance</li>
+                                    <li>Deploy to production</li>
+                                </ul>
+                                <p>What would you like to build today?</p>
+                            </div>
+                        </div>
+
+                        <!-- Typing indicator -->
                         <div class="typing-indicator hidden">
-                            <span></span><span></span><span></span> AI is typing...
+                            <div class="message-avatar ai">AI</div>
+                            <div class="message-content">
+                                <span></span><span></span><span></span> AI is thinking...
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Agent Output Panels Container -->
-                <div id="agent-output-panel" class="agent-output-panel hidden">
-                    <div id="pm-agent-output" class="agent-output-content"></div>
-                    <div id="dev-agent-output" class="agent-output-content hidden"></div>
-                    <div id="qa-agent-output" class="agent-output-content hidden"></div>
-                </div>
+                <!-- Code Canvas -->
+                <div class="code-canvas">
+                    <div class="canvas-header">
+                        <div class="canvas-title">
+                            <i class="fas fa-code"></i>
+                            Code Canvas
+                        </div>
+                        <div class="canvas-actions">
+                            <button class="canvas-button" title="Split View">
+                                <i class="fas fa-columns"></i>
+                            </button>
+                            <button class="canvas-button" title="Full Screen">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <button class="canvas-button" title="Settings">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
 
-                <!-- File Viewer Panel (can be side-by-side or overlay) -->
-                <div id="file-viewer-panel" class="file-viewer-panel hidden">
-                    <div class="file-viewer-header">
-                        <span id="file-viewer-filename"></span>
-                        <div class="file-viewer-actions">
-                            <button id="copy-file-btn" title="Copy to Clipboard"><i class="far fa-copy"></i></button>
-                            <button id="download-file-btn" title="Download File"><i class="fas fa-download"></i></button>
-                            <button id="close-file-viewer-btn" title="Close Viewer"><i class="fas fa-times"></i></button>
+                    <div class="canvas-content">
+                        <div class="canvas-tabs">
+                            <button class="canvas-tab active">
+                                <i class="fab fa-python"></i>
+                                Welcome
+                                <button class="close-btn">×</button>
+                            </button>
                         </div>
-                    </div>
-                    <div class="file-viewer-content">
-                        <pre class="line-numbers"><code id="file-content-display" class="language-javascript"></code></pre>
-                    </div>
-                </div>
-            </div> <!-- End of content-area -->
 
-            <div class="input-area-container">
-                <div class="input-wrapper">
-                    <div class="input-top-row">
-                        <textarea id="requirements-input" placeholder="Describe your project requirements or ask a question..." rows="1"></textarea>
-                        <button id="send-message-btn" title="Send Message">
-                            <i class="fas fa-paper-plane"></i> Send
-                        </button>
-                    </div>
-                    <div class="agent-tabs">
-                        <div class="agent-tab active" data-agent="chat">
-                            <span class="agent-status-dot" data-status-agent="chat"></span> Chat
-                        </div>
-                        <div class="agent-tab" data-agent="pm">
-                            <span class="agent-status-dot" data-status-agent="pm"></span> PM Agent
-                        </div>
-                        <div class="agent-tab" data-agent="dev">
-                            <span class="agent-status-dot" data-status-agent="dev"></span> Dev Agent
-                        </div>
-                        <div class="agent-tab" data-agent="qa">
-                            <span class="agent-status-dot" data-status-agent="qa"></span> QA Agent
-                        </div>
-                        <div class="agent-tab disabled" data-agent="ops">
-                            <span class="agent-status-dot" data-status-agent="ops"></span> Ops Agent
+                        <div class="code-editor">
+                            <div class="code-content" id="file-viewer-content">
+                                <div
+                                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); text-align: center;">
+                                    <i class="fas fa-code"
+                                        style="font-size: 48px; margin-bottom: var(--space-lg); opacity: 0.3;"></i>
+                                    <h3 style="margin-bottom: var(--space-md);">Code Canvas</h3>
+                                    <p>Generated code will appear here</p>
+                                    <p style="font-size: 12px; margin-top: var(--space-md);">Click on files in the
+                                        sidebar to view them</p>
+                                </div>
+                            </div>
+
+                            <div class="code-toolbar">
+                                <button class="toolbar-btn" title="Copy Code">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="toolbar-btn" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="toolbar-btn" title="Run">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </main>
+
+            <!-- Agent Output Panels Container -->
+            <div id="agent-output-panel" class="agent-output-panel hidden">
+                <div id="pm-agent-output" class="agent-output-content"></div>
+                <div id="dev-agent-output" class="agent-output-content hidden"></div>
+                <div id="qa-agent-output" class="agent-output-content hidden"></div>
+            </div>
+
+            <!-- File Viewer Panel (can be side-by-side or overlay) -->
+            <div id="file-viewer-panel" class="file-viewer-panel hidden">
+                <div class="file-viewer-header">
+                    <span id="file-viewer-filename"></span>
+                    <div class="file-viewer-actions">
+                        <button id="copy-file-btn" title="Copy to Clipboard"><i class="far fa-copy"></i></button>
+                        <button id="download-file-btn" title="Download File"><i class="fas fa-download"></i></button>
+                        <button id="close-file-viewer-btn" title="Close Viewer"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <div class="file-viewer-content">
+                    <pre class="line-numbers"><code id="file-content-display" class="language-javascript"></code></pre>
+                </div>
+            </div>
+    </div> <!-- End of content-area -->
+
+    <!-- Modern Input Area -->
+    <div class="input-area-container">
+        <div class="input-wrapper">
+            <div class="input-container">
+                <div class="input-row">
+                    <textarea id="requirements-input" class="input-field"
+                        placeholder="Describe your project or ask me anything..." rows="1"></textarea>
+                    <button id="send-message-btn" class="send-button" title="Send Message">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+
+                <div class="input-actions">
+                    <div class="agent-selector">
+                        <div class="agent-chip active" data-agent="chat">
+                            <div class="agent-status-dot" data-status-agent="chat"></div>
+                            Chat
+                        </div>
+                        <div class="agent-chip" data-agent="pm">
+                            <div class="agent-status-dot" data-status-agent="pm"></div>
+                            PM Agent
+                        </div>
+                        <div class="agent-chip" data-agent="dev">
+                            <div class="agent-status-dot" data-status-agent="dev"></div>
+                            Dev Agent
+                        </div>
+                        <div class="agent-chip" data-agent="qa">
+                            <div class="agent-status-dot" data-status-agent="qa"></div>
+                            QA Agent
+                        </div>
+                        <div class="agent-chip" data-agent="ops">
+                            <div class="agent-status-dot" data-status-agent="ops"></div>
+                            Ops Agent
+                        </div>
+                    </div>
+
+                    <div class="input-shortcuts">
+                        <span><span class="shortcut-key">⌘</span> + <span class="shortcut-key">Enter</span> to
+                            send</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </main>
     </div>
 
     <!-- Custom Message Box (hidden by default, controlled by JS) -->
@@ -976,8 +2094,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
     <!-- Prism.js core and autoloader for syntax highlighting -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+    <script
+        src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script
+        src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 
     <!-- Your PlanningDashboard.js script -->
     <script>
@@ -1019,14 +2139,14 @@
                 // Basic UI controls
                 this.requirementsInput = document.getElementById('requirements-input');
                 this.sendMessageBtn = document.getElementById('send-message-btn');
-                // Main panels
+                // Main panels - Updated for new UI
                 this.mainContent = document.querySelector('.main-content');
-                this.contentArea = document.querySelector('.content-area'); // New content area
+                this.contentArea = document.querySelector('.content-area');
                 this.welcomeView = document.getElementById('welcome-view');
-                this.chatPanel = document.getElementById('chat-panel');
+                this.chatPanel = document.querySelector('.chat-panel');
                 this.chatHistoryContainer = document.getElementById('chat-history');
-                this.agentOutputPanel = document.getElementById('agent-output-panel');
-                this.fileViewerPanel = document.getElementById('file-viewer-panel');
+                this.codeCanvas = document.querySelector('.code-canvas');
+                this.fileViewerContent = document.getElementById('file-viewer-content');
                 // Agent outputs (individual panels)
                 this.pmAgentOutput = document.getElementById('pm-agent-output');
                 this.devAgentOutput = document.getElementById('dev-agent-output');
@@ -1038,11 +2158,11 @@
                 this.closeFileViewerBtn = document.getElementById('close-file-viewer-btn');
                 this.downloadFileBtn = document.getElementById('download-file-btn');
                 this.copyFileBtn = document.getElementById('copy-file-btn');
-                // Agent tabs
-                this.agentTabs = document.querySelectorAll('.agent-tab');
-                this.agentTabs.forEach(tab => {
-                    const agentType = tab.dataset.agent;
-                    this.agentStatusDots[agentType] = tab.querySelector('.agent-status-dot');
+                // Agent chips - Updated for new UI
+                this.agentChips = document.querySelectorAll('.agent-chip');
+                this.agentChips.forEach(chip => {
+                    const agentType = chip.dataset.agent;
+                    this.agentStatusDots[agentType] = chip.querySelector('.agent-status-dot');
                 });
                 // Typing indicator
                 this.typingIndicator = document.querySelector('.typing-indicator');
@@ -1169,6 +2289,33 @@
                     pre.appendChild(button);
                 });
             }
+            // Adds clean code to chat with syntax highlighting
+            addCodeToChat(code, language = 'python') {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('chat-message', 'ai');
+
+                const avatarElement = document.createElement('div');
+                avatarElement.classList.add('chat-avatar', 'ai');
+                avatarElement.textContent = 'Akino';
+
+                const contentElement = document.createElement('div');
+                contentElement.classList.add('chat-content');
+
+                // Create code block with proper syntax highlighting
+                const lang = language || 'python';
+                const highlightedCode = Prism.highlight(code, Prism.languages[lang] || Prism.languages.plaintext, lang);
+                contentElement.innerHTML = `<pre class="line-numbers"><code class="language-${lang}">${highlightedCode}</code></pre>`;
+
+                messageElement.appendChild(avatarElement);
+                messageElement.appendChild(contentElement);
+                this.chatHistoryContainer.appendChild(messageElement);
+
+                // Add copy button to the code block
+                this.addCopyButtonsToCodeBlocks(messageElement);
+
+                // Scroll to bottom
+                this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
+            }
             // Setup Marked.js to work with Prism.js for syntax highlighting
             setupMarkdownRenderer() {
                 const renderer = new marked.Renderer();
@@ -1258,12 +2405,13 @@
                         this.addLogMessage('File content not available for copy.', 'warning');
                     }
                 });
-                this.agentTabs.forEach(tab => {
-                    tab.addEventListener('click', (e) => {
+                // Updated for agent chips
+                this.agentChips.forEach(chip => {
+                    chip.addEventListener('click', (e) => {
                         if (e.target.classList.contains('disabled')) return;
-                        this.agentTabs.forEach(t => t.classList.remove('active'));
-                        e.target.classList.add('active');
-                        this.activeAgentTab = e.target.dataset.agent;
+                        this.agentChips.forEach(c => c.classList.remove('active'));
+                        chip.classList.add('active');
+                        this.activeAgentTab = chip.dataset.agent;
                         this.showActiveAgentPanel(this.activeAgentTab);
                     });
                 });
@@ -1691,48 +2839,59 @@
                     prevSelected.classList.remove('selected');
                 }
                 this.activeFile = filePath;
+
                 // Add 'selected' class to the current file item
                 const currentFileItem = this.fileTree.querySelector(`[onclick*="showFileContent('${filePath}')"]`);
                 if (currentFileItem) {
                     currentFileItem.classList.add('selected');
                 }
-                this.welcomeView.classList.add('hidden');
-                // Ensure the correct agent panel is visible on the left side
-                this.showActiveAgentPanel(this.activeAgentTab); // This will hide the other main panels
-                this.fileViewerPanel.classList.remove('hidden'); // Show file viewer
-                this.contentArea.classList.add('split-active'); // Activate split view on contentArea
-                this.fileViewerFilename.textContent = filePath;
+
+                // Update canvas tab
+                const canvasTab = document.querySelector('.canvas-tab.active');
+                if (canvasTab) {
+                    const fileName = filePath.split('/').pop() || filePath;
+                    const fileExtension = fileName.split('.').pop();
+                    let icon = 'fas fa-file';
+
+                    switch (fileExtension) {
+                        case 'py': icon = 'fab fa-python'; break;
+                        case 'js': case 'jsx': icon = 'fab fa-js'; break;
+                        case 'html': icon = 'fab fa-html5'; break;
+                        case 'css': icon = 'fab fa-css3'; break;
+                        case 'json': icon = 'fas fa-code'; break;
+                    }
+
+                    canvasTab.innerHTML = `
+                        <i class="${icon}"></i>
+                        ${fileName}
+                        <button class="close-btn">×</button>
+                    `;
+                }
+
+                // Show content in code canvas
                 if (this.projectFiles[filePath] && this.projectFiles[filePath].content && !this.projectFiles[filePath].content.startsWith('// Content for')) {
                     const fileContent = this.projectFiles[filePath].content;
                     const fileExtension = filePath.split('.').pop();
                     let languageClass = 'language-text';
+
                     switch (fileExtension) {
-                        case 'js':
-                        case 'jsx':
-                            languageClass = 'language-javascript';
-                            break;
-                        case 'py':
-                            languageClass = 'language-python';
-                            break;
-                        case 'json':
-                            languageClass = 'language-json';
-                            break;
-                        case 'html':
-                        case 'htm':
-                            languageClass = 'language-html';
-                            break;
-                        case 'css':
-                            languageClass = 'language-css';
-                            break;
-                        case 'md':
-                            languageClass = 'language-markdown';
-                            break;
-                        // Add more cases as needed
+                        case 'js': case 'jsx': languageClass = 'language-javascript'; break;
+                        case 'py': languageClass = 'language-python'; break;
+                        case 'json': languageClass = 'language-json'; break;
+                        case 'html': case 'htm': languageClass = 'language-html'; break;
+                        case 'css': languageClass = 'language-css'; break;
+                        case 'md': languageClass = 'language-markdown'; break;
                     }
-                    this.fileContentDisplay.innerHTML = `<pre class="line-numbers"><code class="${languageClass}">${fileContent}</code></pre>`;
-                    Prism.highlightElement(this.fileContentDisplay.querySelector('code'));
+
+                    this.fileViewerContent.innerHTML = `<pre class="line-numbers"><code class="${languageClass}">${fileContent}</code></pre>`;
+                    Prism.highlightElement(this.fileViewerContent.querySelector('code'));
                 } else {
-                    this.fileContentDisplay.innerHTML = '<div class="code-placeholder">Loading...</div>';
+                    this.fileViewerContent.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted);">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: var(--space-md);"></i>
+                            <p>Loading ${filePath}...</p>
+                        </div>
+                    `;
                     this.ws.send(JSON.stringify({ type: 'request_file_content', file_path: filePath }));
                 }
             }
@@ -1809,10 +2968,14 @@
                             // Can update specific agent status more granularly here if needed
                             break;
                         case 'file_generated':
+                            console.log('File generated data:', data); // Debug log
                             this.handleFileGenerated(data);
                             this.renderFileTree();
-                            this.addLogMessage(`File generated: ${data.file_path}`, 'info');
-                            this.addChatMessage(`A new file has been generated: <code>${data.file_path}</code>. Click on it in the left panel to view.`, 'ai');
+                            this.addLogMessage(`File generated: ${data.file_path || data.file_name}`, 'info');
+                            // Only show file generation message for non-code files or if no separate code message was sent
+                            if (!data.file_type || !['python', 'javascript', 'typescript', 'html', 'css'].includes(data.file_type)) {
+                                this.addChatMessage(`📁 **File generated:** <code>${data.file_path || data.file_name}</code>\n\nClick on it in the left panel to view the full content.`, 'ai');
+                            }
                             break;
                         case 'file_content_response':
                             if (data.file_path && this.projectFiles[data.file_path]) {
@@ -1821,6 +2984,15 @@
                                     this.showFileContent(data.file_path); // Re-render with actual content
                                 }
                             }
+                            break;
+                        case 'dev_agent_documentation':
+                            // Show documentation in chat panel
+                            this.addChatMessage(`📖 **Documentation for ${data.task_id}:**\n\n${data.content}`, 'ai');
+                            break;
+                        case 'dev_agent_code_generated':
+                            // Show clean code in chat panel with syntax highlighting
+                            this.addChatMessage(`💻 **Generated ${data.filename}:**`, 'ai');
+                            this.addCodeToChat(data.content, data.language);
                             break;
                         case 'error':
                             this.handleError(data);
@@ -1845,13 +3017,20 @@
                 }
             }
             handleFileGenerated(data) {
-                if (data.file_path) {
-                    this.projectFiles[data.file_path] = {
-                        name: data.file_name || data.file_path.split('/').pop(),
-                        path: data.file_path,
+                // Use the full file path for proper file tree organization
+                const filePath = data.file_path || data.file_name;
+                if (filePath) {
+                    this.projectFiles[filePath] = {
+                        name: data.file_name || filePath.split('/').pop(),
+                        path: filePath,
                         content: data.content || `// Content for ${data.file_name} will be loaded on click.`,
                         type: 'file'
                     };
+
+                    // If this file is currently being viewed, update the display immediately
+                    if (this.activeFile === filePath) {
+                        this.showFileContent(filePath);
+                    }
                 }
             }
             handleError(data) {
@@ -1987,4 +3166,5 @@
         });
     </script>
 </body>
+
 </html>

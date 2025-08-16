@@ -222,6 +222,7 @@ Provide a detailed, actionable plan that a development team can follow from star
         """
         Deletes all files in raw plans, parsed plans, dev_outputs, and qa_outputs directories.
         Ensures operation within the generated_code_root for safety.
+        This method automatically cleans up previous plans when a new user request comes in.
         """
         dirs_to_clean = [
             self.generated_code_root / "dev_outputs",
@@ -230,30 +231,57 @@ Provide a detailed, actionable plan that a development team can follow from star
             self.generated_code_root / "qa_outputs"
         ]
 
-        logger.info("Cleaning up old generated output directories...")
+        logger.info("🧹 PM Agent: Starting automatic cleanup of previous plans and outputs...")
+        
+        # Count files before cleanup for better logging
+        total_files_removed = 0
         for d in dirs_to_clean:
             if d.exists():
                 try:
-                    # Remove content, but keep the directory itself
-                    for item in d.iterdir():
-                        if item.is_file():
-                            item.unlink()
-                        elif item.is_dir():
-                            shutil.rmtree(item)
-                    logger.info(f"Cleaned contents of: {d}")
+                    files_in_dir = list(d.iterdir())
+                    files_count = len(files_in_dir)
+                    
+                    if files_count > 0:
+                        logger.info(f"🗑️  Removing {files_count} items from: {d.name}")
+                        
+                        # Remove content, but keep the directory itself
+                        for item in files_in_dir:
+                            if item.is_file():
+                                item.unlink()
+                                total_files_removed += 1
+                            elif item.is_dir():
+                                shutil.rmtree(item)
+                                total_files_removed += 1
+                        
+                        logger.info(f"✅ Cleaned contents of: {d.name}")
+                    else:
+                        logger.info(f"📁 Directory already empty: {d.name}")
+                        
                 except Exception as e:
-                    logger.warning(f"Failed to clean contents of {d}: {e}")
+                    logger.warning(f"❌ Failed to clean contents of {d}: {e}")
+            else:
+                logger.info(f"📁 Directory doesn't exist yet: {d.name}")
+                
             # Ensure the directory exists after cleaning (or if it didn't exist initially)
             d.mkdir(parents=True, exist_ok=True)
-        logger.info("Finished cleaning up generated output directories.")
+            
+        if total_files_removed > 0:
+            logger.info(f"🎯 PM Agent: Successfully removed {total_files_removed} previous files/directories")
+        else:
+            logger.info("🎯 PM Agent: No previous files to clean up")
+            
+        logger.info("✨ PM Agent: Automatic cleanup completed - ready for new user request")
 
     async def create_plan_and_stream_tasks(self, user_input: str, websocket: WebSocket):
         """
         Generates a comprehensive plan from user input, streams LLM output,
         parses the plan, stores it, and then yields individual tasks as they are parsed.
         This method acts as an async generator.
+        
+        AUTOMATIC CLEANUP: This method automatically deletes all previous plans and outputs
+        when a new user request comes in, ensuring only the current request's data is kept.
         """
-        # Clean up all previous outputs before starting a new plan
+        # 🧹 AUTOMATIC CLEANUP: Remove all previous plans and outputs before starting new plan
         self._cleanup_all_outputs()
 
         plan_id = str(uuid.uuid4())  # Generate a unique ID for this planning session

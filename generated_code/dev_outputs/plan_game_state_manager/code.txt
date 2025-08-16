@@ -1,0 +1,17 @@
+.
+├── src/
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── event_bus.py      # Dependency from task_007 (stub)
+│   │   └── scene_manager.py    # Dependency from task_004 (stub)
+│   ├── game_states/
+│   │   ├── __init__.py
+│   │   ├── base_state.py
+│   │   ├── concrete_states.py
+│   │   ├── state_manager.py
+│   │   └── states.py
+│   └── __init__.py
+├── tests/
+│   └── test_state_manager.py
+├── main.py
+└── requirements.txt

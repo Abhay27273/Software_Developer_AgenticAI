@@ -1,10 +1,12 @@
 # config.py
 from pathlib import Path
+import os
 
-# Use the /tmp directory, which is guaranteed to be writable
-GENERATED_CODE_ROOT = Path("/tmp/generated_code")
+# Use the current working directory's generated_code folder for Windows compatibility
+# This will create the generated_code folder in your project directory
+GENERATED_CODE_ROOT = Path.cwd() / "generated_code"
 
-# DEV_OUTPUT_DIR will then be a subdirectory of /tmp/generated_code
+# DEV_OUTPUT_DIR will then be a subdirectory of generated_code in your project
 DEV_OUTPUT_DIR = GENERATED_CODE_ROOT / "dev_outputs"
 
 # Add other configurations here, like model names

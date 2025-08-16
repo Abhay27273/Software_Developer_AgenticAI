@@ -1,0 +1,51 @@
+graph TD
+    subgraph GameLoop [Main Game Loop]
+        direction TB
+        A[Process Input] --> B{Update};
+        B --> C[Render];
+        C --> A;
+    end
+
+    subgraph CoreEngine
+        SM[State Machine]
+        SCM[Scene Manager]
+        EB[Event Bus]
+    end
+
+    subgraph Systems
+        IS[Input System]
+        PS[Physics System]
+        RS[Render System]
+        UIS[UI System]
+    end
+
+    subgraph GameData
+        GO[Game Objects]
+        C1[Components]
+    end
+
+    GameLoop -- Manages --> SM;
+    SM -- Controls --> SCM;
+    SCM -- Manages --> GO;
+    GO -- Composed of --> C1;
+
+    A -- Calls --> IS;
+    B -- Calls --> PS;
+    C -- Calls --> RS;
+    C -- Calls --> UIS;
+
+    IS -- Publishes events to --> EB;
+    PS -- Operates on --> C1;
+    RS -- Operates on --> C1;
+
+    subgraph Communication
+        EB
+    end
+
+    IS -.-> EB;
+    EB -.-> PS;
+    EB -.-> UIS;
+
+    classDef default fill:#2d3436,stroke:#dfe6e9,stroke-width:2px,color:#fff;
+    classDef subgraph fill:#353b48,stroke:#f5f6fa,color:#fff;
+    class GameLoop,CoreEngine,Systems,GameData,Communication subgraph;

@@ -1,0 +1,1 @@
+python asset_validator.py

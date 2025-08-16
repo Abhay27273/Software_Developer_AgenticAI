@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model_file": "car.obj",
+  "mass_kg": 1200,
+  "center_of_mass_offset": {
+    "x": 0.0,
+    "y": -0.2,
+    "z": 0.0
+  },
+  "attachment_points": {
+    "wheel_front_left": {
+      "position": [-1.35, -0.5, 1.35],
+      "suspension_travel_m": 0.15,
+      "suspension_stiffness": 25000,
+      "damping_compression": 1500,
+      "damping_rebound": 2500,
+      "steerable": true
+    },
+    "wheel_front_right": {
+      "position": [1.35, -0.5, 1.35],
+      "suspension_travel_m": 0.15,
+      "suspension_stiffness": 25000,
+      "damping_compression": 1500,
+      "damping_rebound": 2500,
+      "steerable": true
+    },
+    "wheel_rear_left": {
+      "position": [-1.35, -0.5, -1.35],
+      "suspension_travel_m": 0.15,
+      "suspension_stiffness": 28000,
+      "damping_compression": 1800,
+      "damping_rebound": 2800,
+      "steerable": false
+    },
+    "wheel_rear_right": {
+      "position": [1.35, -0.5, -1.35],
+      "suspension_travel_m": 0.15,
+      "suspension_stiffness": 28000,
+      "damping_compression": 1800,
+      "damping_rebound": 2800,
+      "steerable": false
+    }
+  }
+}

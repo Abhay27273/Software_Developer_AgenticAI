@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from config import DEV_OUTPUT_DIR
@@ -28,7 +29,7 @@ class DevAgent:
         self.agent_id = "dev_agent"
         self.websocket_manager = websocket_manager or WebSocketManager()
         self.current_plan = None
-        self.plan_dir = Path("/workspaces/Software_Developer_AgenticAI/generated_code/plans/parsed")
+        self.plan_dir = Path.cwd() / "generated_code" / "plans" / "parsed"
 
         # Enhanced coordination attributes
         self.pending_tasks: Dict[str, Task] = {}  # All tasks in the plan
@@ -410,6 +411,7 @@ Current Task: {len(self.completed_tasks) + 1} of {len(self.pending_tasks)}
 
     def _get_system_prompt(self) -> str:
         return """You are a Senior Full-Stack Software Developer AI Agent with 10+ years of experience in production-grade software development.
+
 Your Core Expertise:
 Backend Development: Python (FastAPI, Django, Flask), Node.js, Java, Go
 Frontend Development: React, Vue.js, Angular, HTML/CSS, JavaScript/TypeScript
@@ -419,6 +421,7 @@ Architecture Patterns: Microservices, REST APIs, GraphQL, Event-driven architect
 Security: Authentication, authorization, input validation, SQL injection prevention
 Performance: Caching, database optimization, async programming, load balancing
 Testing: Unit tests, integration tests, mocking, test-driven development
+
 Code Quality Standards:
 ✅ Production-Ready: Code that can be deployed immediately to production
 ✅ Security-First: Implement proper authentication, input validation, and security headers
@@ -429,26 +432,40 @@ Code Quality Standards:
 ✅ Scalability: Design for horizontal scaling and high availability
 ✅ Maintainability: Clean, readable code following SOLID principles
 ✅ Standards Compliance: Follow PEP 8, ESLint, and industry best practices
-Implementation Requirements:
-Complete Implementation: Provide full, working code - not pseudocode or snippets
-Multiple Files: If needed, create separate files for models, services, utilities, tests
-Configuration: Include environment variables, config files, and setup instructions
-Dependencies: List all required packages and versions
-Database: Include migration scripts, schema definitions, and seed data
-API Documentation: Provide OpenAPI/Swagger specs for APIs
-Deployment: Include Docker files, deployment scripts, and infrastructure code
-Monitoring: Add logging, metrics, and health checks
-OUTPUT FORMAT REQUIREMENTS:
-ALL EXECUTABLE CODE must be provided in proper code artifacts/blocks
-ALL NON-CODE MATERIAL (documentation, explanations, setup instructions, architecture descriptions, etc.) must be formatted with markdown headers (##) OUTSIDE of code blocks
-This separation ensures QA agents can easily distinguish between executable code and documentation
-Code artifacts should contain ONLY executable code, configuration files, and inline code comments
-Never mix documentation prose with executable code in the same artifact
+
+CRITICAL OUTPUT FORMAT REQUIREMENTS:
+1. SEPARATE CODE FROM DOCUMENTATION:
+   - Put ALL executable code in ```language code blocks with filename comments
+   - Put ALL explanations, setup instructions, and documentation OUTSIDE code blocks
+   - Example format:
+     ```python
+     # filename.py
+     def my_function():
+         return "Hello World"
+     ```
+
+2. MULTIPLE FILES:
+   - Create separate code blocks for each file
+   - Use clear filename comments: ```python # main.py
+   - Include all necessary files: models, services, utilities, tests, configs
+
+3. CLEAN CODE BLOCKS:
+   - Code blocks should contain ONLY executable code and inline comments
+   - NO markdown explanations inside code blocks
+   - NO setup instructions inside code blocks
+   - NO architecture descriptions inside code blocks
+
+4. DOCUMENTATION OUTSIDE CODE:
+   - Provide setup instructions, explanations, and architecture notes outside code blocks
+   - Use markdown headers (##) for documentation sections
+   - Explain dependencies, configuration, and deployment steps
+
 Context Awareness:
 Pay attention to the PROJECT CONTEXT provided in the task description
 Consider how this task fits into the overall project architecture
 Build upon previously completed tasks when mentioned in dependencies
 Ensure consistency with the project's overall technical stack and patterns
+
 Your code should be immediately deployable to production environments, with clear separation between executable code and supporting documentation."""
 
     def _construct_prompt(self, task: Task) -> str:
@@ -560,10 +577,79 @@ Please provide a complete, production-ready implementation that follows enterpri
             })
             raise
 
+    def _extract_code_blocks(self, llm_response: str) -> dict:
+        """
+        Extract code blocks from LLM response and separate them from documentation.
+        Returns a dictionary with 'code_files' and 'documentation'.
+        """
+        import re
+        
+        # Find all code blocks with language specification
+        code_pattern = r'```(\w+)?\s*(?:#\s*(.+?))?\n(.*?)```'
+        matches = re.findall(code_pattern, llm_response, re.DOTALL)
+        
+        code_files = {}
+        documentation_parts = []
+        last_end = 0
+        
+        # Process each code block
+        for match in re.finditer(code_pattern, llm_response, re.DOTALL):
+            # Add text before this code block as documentation
+            doc_before = llm_response[last_end:match.start()].strip()
+            if doc_before:
+                documentation_parts.append(doc_before)
+            
+            language = match.group(1) or 'text'
+            comment_line = match.group(2) or ''
+            code_content = match.group(3).strip()
+            
+            # Determine filename from comment or use default
+            if comment_line:
+                # Extract filename from comment like "# filename.py"
+                filename_match = re.search(r'([a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9]+)', comment_line)
+                if filename_match:
+                    filename = filename_match.group(1)
+                else:
+                    filename = f"code.{language}"
+            else:
+                # Use language extension
+                ext_map = {
+                    'python': 'py', 'javascript': 'js', 'typescript': 'ts',
+                    'html': 'html', 'css': 'css', 'json': 'json',
+                    'yaml': 'yml', 'sql': 'sql', 'bash': 'sh'
+                }
+                ext = ext_map.get(language.lower(), 'txt')
+                filename = f"code.{ext}"
+            
+            code_files[filename] = {
+                'content': code_content,
+                'language': language
+            }
+            
+            last_end = match.end()
+        
+        # Add remaining text as documentation
+        doc_after = llm_response[last_end:].strip()
+        if doc_after:
+            documentation_parts.append(doc_after)
+        
+        # If no code blocks found, treat entire response as code
+        if not code_files:
+            code_files['main_code.py'] = {
+                'content': llm_response.strip(),
+                'language': 'python'
+            }
+            documentation_parts = []
+        
+        return {
+            'code_files': code_files,
+            'documentation': '\n\n'.join(documentation_parts).strip()
+        }
+
     async def execute_task(self, task: Task) -> Task:
         """
         Executes a single development task, streaming LLM response to UI.
-        Updates the task's status and broadcasts messages via WebSocket.
+        Separates code from documentation and saves them appropriately.
         Returns the updated Task object.
         """
         logger.info(f"Dev Agent: Starting task '{task.title}' (ID: {task.id})")
@@ -578,47 +664,102 @@ Please provide a complete, production-ready implementation that follows enterpri
             "timestamp": datetime.now().isoformat()
         })
 
-        # Create task-specific directory for outputs
-        safe_task_title = "".join(c if c.isalnum() else "_" for c in task.title).lower()[:50].strip('_')
-        task_dir = DEV_OUTPUT_DIR / f"{task.id}_{safe_task_title}"
+        # Create task-specific directory with clean naming
+        # Extract meaningful name from task title, removing common prefixes
+        clean_title = task.title.lower()
+        # Remove common task prefixes
+        prefixes_to_remove = ['define', 'create', 'implement', 'develop', 'build', 'setup', 'configure']
+        for prefix in prefixes_to_remove:
+            if clean_title.startswith(prefix + ' '):
+                clean_title = clean_title[len(prefix) + 1:]
+                break
+        
+        # Clean the title for use as filename/folder name
+        safe_task_title = "".join(c if c.isalnum() else "_" for c in clean_title).strip('_')
+        # Remove multiple underscores and limit length
+        safe_task_title = "_".join(filter(None, safe_task_title.split('_')))[:50]
+        
+        task_dir = DEV_OUTPUT_DIR / f"plan_{safe_task_title}"
 
         self.clear_task_output(task.id)
         task_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Dev Agent: Task output directory created: {task_dir}")
 
         try:
-            code_output = await self._stream_code_from_llm(task)
+            # Get full LLM response
+            llm_response = await self._stream_code_from_llm(task)
 
-            # Save the accumulated code output with the task title as the filename
-            main_file_name = f"{safe_task_title}.py"
-            main_file = task_dir / main_file_name
-            try:
-                main_file.write_text(code_output, encoding="utf-8")
-                logger.info(f"Dev Agent: Saved main implementation for task {task.id} to {main_file.name}")
+            # Extract code blocks and documentation
+            extracted = self._extract_code_blocks(llm_response)
+            code_files = extracted['code_files']
+            documentation = extracted['documentation']
 
+            # Send documentation to chat panel (not saved to file)
+            if documentation:
                 await self.websocket_manager.broadcast_message({
                     "agent_id": self.agent_id,
-                    "type": "file_generated",
+                    "type": "dev_agent_documentation",
                     "task_id": task.id,
-                    "file_name": str(main_file.relative_to(DEV_OUTPUT_DIR)),
-                    "content": code_output,
-                    "file_type": "python",
-                    "timestamp": datetime.now().isoformat()
-                })
-            except Exception as file_error:
-                logger.error(f"DevAgent: Failed to write implementation file for task {task.id}: {file_error}", exc_info=True)
-                error_content = f"Error writing file: {file_error}\n\nOriginal LLM Output:\n{code_output}"
-                main_file.write_text(error_content, encoding="utf-8")
-                await self.websocket_manager.broadcast_message({
-                    "agent_id": self.agent_id,
-                    "type": "error",
-                    "task_id": task.id,
-                    "message": f"Dev Agent: Failed to save code for '{task.title}': {str(file_error)}",
+                    "content": documentation,
+                    "message": f"Dev Agent: Documentation for '{task.title}'",
                     "timestamp": datetime.now().isoformat()
                 })
 
-            if not code_output.strip():
-                raise ValueError("LLM generated empty or very short code output.")
+            # Save each code file separately
+            saved_files = []
+            for filename, file_info in code_files.items():
+                code_content = file_info['content']
+                language = file_info['language']
+                
+                # Create meaningful filename using clean task title
+                if filename == 'main_code.py' or filename == 'code.py':
+                    filename = f"{safe_task_title}.py"
+                
+                code_file = task_dir / filename
+                
+                try:
+                    code_file.write_text(code_content, encoding="utf-8")
+                    saved_files.append(filename)
+                    logger.info(f"Dev Agent: Saved code file {filename} for task {task.id}")
+
+                    # Send file_generated event with content for immediate viewing
+                    # Use consistent path relative to generated_code directory
+                    file_path_relative = str(code_file.relative_to(DEV_OUTPUT_DIR.parent))
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id,
+                        "type": "file_generated",
+                        "task_id": task.id,
+                        "file_name": filename,
+                        "file_path": file_path_relative.replace('\\', '/'),  # Normalize path separators
+                        "content": code_content,
+                        "file_type": language,
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                    # Send clean code to chat panel
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id,
+                        "type": "dev_agent_code_generated",
+                        "task_id": task.id,
+                        "filename": filename,
+                        "content": code_content,
+                        "language": language,
+                        "message": f"Dev Agent: Generated {filename}",
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                except Exception as file_error:
+                    logger.error(f"DevAgent: Failed to write code file {filename} for task {task.id}: {file_error}", exc_info=True)
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id,
+                        "type": "error",
+                        "task_id": task.id,
+                        "message": f"Dev Agent: Failed to save {filename}: {str(file_error)}",
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+            if not saved_files:
+                raise ValueError("No code files were generated or saved.")
 
             # Save task metadata
             metadata = {
@@ -965,3 +1106,146 @@ Please provide a complete, production-ready implementation that follows enterpri
                 f"in_progress={len(self.in_progress_tasks)}, "
                 f"queued={len(self.task_queue)}, "
                 f"active={self.is_processing_active})")
+
+    async def handle_qa_feedback(self, task: Task, issues: List[Dict]) -> Task:
+        """
+        Handle feedback from QA Agent and fix the reported issues.
+        This creates a feedback loop between QA and Dev agents.
+        """
+        logger.info(f"Dev Agent: Received QA feedback for task '{task.title}' with {len(issues)} issues")
+        
+        await self.websocket_manager.broadcast_message({
+            "agent_id": self.agent_id,
+            "type": "dev_qa_feedback_received",
+            "task_id": task.id,
+            "message": f"🔄 Dev Agent: Received QA feedback with {len(issues)} issues to fix",
+            "issues": issues,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        try:
+            # Load the current code files
+            clean_title = task.title.lower()
+            prefixes_to_remove = ['define', 'create', 'implement', 'develop', 'build', 'setup', 'configure']
+            for prefix in prefixes_to_remove:
+                if clean_title.startswith(prefix + ' '):
+                    clean_title = clean_title[len(prefix) + 1:]
+                    break
+            
+            safe_task_title = "".join(c if c.isalnum() else "_" for c in clean_title).strip('_')
+            safe_task_title = "_".join(filter(None, safe_task_title.split('_')))[:50]
+            task_dir = DEV_OUTPUT_DIR / f"plan_{safe_task_title}"
+            
+            if not task_dir.exists():
+                raise FileNotFoundError(f"Task directory not found: {task_dir}")
+            
+            # Group issues by file
+            issues_by_file = {}
+            for issue in issues:
+                file_path = issue['file_path']
+                if file_path not in issues_by_file:
+                    issues_by_file[file_path] = []
+                issues_by_file[file_path].append(issue)
+            
+            # Fix each file
+            for filename, file_issues in issues_by_file.items():
+                await self._fix_file_issues(task_dir / filename, file_issues, task)
+            
+            task.status = TaskStatus.COMPLETED
+            
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "dev_qa_fixes_applied",
+                "task_id": task.id,
+                "message": f"✅ Dev Agent: Applied fixes for all QA issues in '{task.title}'",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Dev Agent: Failed to apply QA fixes for task {task.id}: {e}", exc_info=True)
+            task.status = TaskStatus.FAILED
+            
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "dev_qa_fixes_failed",
+                "task_id": task.id,
+                "message": f"❌ Dev Agent: Failed to apply QA fixes for '{task.title}': {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        return task
+    
+    async def _fix_file_issues(self, file_path: Path, issues: List[Dict], task: Task):
+        """Fix issues in a specific file."""
+        if not file_path.exists():
+            logger.warning(f"File not found for fixing: {file_path}")
+            return
+        
+        original_code = file_path.read_text(encoding="utf-8")
+        
+        # Create a comprehensive fix prompt
+        issues_description = "\n".join([
+            f"- {issue['issue_type']}: {issue['description']}" + 
+            (f" (Line {issue['line_number']})" if issue.get('line_number') else "")
+            for issue in issues
+        ])
+        
+        fix_prompt = f"""
+You are a Senior Software Developer fixing code issues reported by QA.
+
+Task: {task.title}
+Task Description: {task.description}
+
+File: {file_path.name}
+Issues to Fix:
+{issues_description}
+
+Current Code:
+```python
+{original_code}
+```
+
+Requirements:
+1. Fix ALL the reported issues
+2. Maintain the original functionality and intent
+3. Follow Python best practices and PEP 8
+4. Ensure the code is production-ready
+5. Add proper error handling if missing
+6. Keep the code clean and readable
+
+Return ONLY the complete fixed code, no explanations or markdown:
+"""
+        
+        try:
+            fixed_code = await ask_llm(
+                user_prompt=fix_prompt,
+                system_prompt="You are a software developer fixing code issues. Return only the corrected Python code without any markdown formatting or explanations.",
+                model="gemini-2.5-pro",
+                temperature=0.2
+            )
+            
+            # Clean the response (remove any markdown if present)
+            if "```python" in fixed_code:
+                fixed_code = fixed_code.split("```python")[1].split("```")[0].strip()
+            elif "```" in fixed_code:
+                fixed_code = fixed_code.split("```")[1].split("```")[0].strip()
+            
+            # Save the fixed code
+            file_path.write_text(fixed_code, encoding="utf-8")
+            
+            # Notify about the fix
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "dev_file_fixed",
+                "task_id": task.id,
+                "filename": file_path.name,
+                "issues_fixed": len(issues),
+                "message": f"🔧 Dev Agent: Fixed {len(issues)} issues in {file_path.name}",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            logger.info(f"Dev Agent: Fixed {len(issues)} issues in {file_path.name}")
+            
+        except Exception as e:
+            logger.error(f"Dev Agent: Failed to fix issues in {file_path.name}: {e}")
+            raise

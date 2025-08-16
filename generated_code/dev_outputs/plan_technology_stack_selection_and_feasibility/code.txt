@@ -1,0 +1,143 @@
+// GyroController.cs
+using UnityEngine;
+using TMPro; // Use TextMeshPro for UI text
+
+/// <summary>
+/// Production-ready controller for handling gyroscope input to rotate a GameObject.
+/// This script demonstrates feasibility by providing smooth, calibrated, and configurable
+/// gyro controls for a mobile device.
+/// </summary>
+[AddComponentMenu("Control/Gyro Controller")]
+public class GyroController : MonoBehaviour
+{
+    #region Public Fields
+    [Header("Configuration")]
+    [Tooltip("Controls the responsiveness of the rotation. Higher values mean faster rotation.")]
+    [Range(0.1f, 5.0f)]
+    public float sensitivity = 1.0f;
+
+    [Tooltip("Smoothing factor for the gyroscope input to reduce jitter. 0 = no smoothing, 1 = max smoothing.")]
+    [Range(0.0f, 0.99f)]
+    public float smoothingFactor = 0.85f;
+
+    [Header("UI (Optional)")]
+    [Tooltip("Optional TextMeshPro UI element to display status and debug info.")]
+    public TextMeshProUGUI statusText;
+    #endregion
+
+    #region Private Fields
+    private bool isGyroSupported;
+    private Quaternion calibrationQuaternion;
+    private Vector3 smoothedRotationRate;
+    #endregion
+
+    #region Unity Lifecycle Methods
+    /// <summary>
+    /// Called when the script instance is being loaded.
+    /// Initializes gyroscope and sets up initial state.
+    /// </summary>
+    void Start()
+    {
+        InitializeGyro();
+    }
+
+    /// <summary>
+    /// Called once per frame.
+    /// Handles input for calibration and updates the object's rotation.
+    /// </summary>
+    void Update()
+    {
+        if (!isGyroSupported)
+        {
+            return;
+        }
+
+        // Handle recalibration input (e.g., screen tap)
+        if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+        {
+            Calibrate();
+        }
+
+        UpdateRotation();
+    }
+    #endregion
+
+    #region Core Logic
+    /// <summary>
+    /// Checks for gyroscope support and enables it.
+    /// </summary>
+    private void InitializeGyro()
+    {
+        // Check if the device supports the gyroscope
+        isGyroSupported = SystemInfo.supportsGyroscope;
+
+        if (isGyroSupported)
+        {
+            Input.gyro.enabled = true; // Enable the gyroscope
+            UpdateStatus("Gyroscope enabled. Tap to calibrate.");
+            Calibrate(); // Perform initial calibration
+        }
+        else
+        {
+            UpdateStatus("Error: Gyroscope not supported on this device.");
+            Debug.LogError("Gyroscope not supported on this device.");
+        }
+    }
+
+    /// <summary>
+    /// Calibrates the gyroscope by storing the current attitude as the neutral rotation.
+    /// </summary>
+    public void Calibrate()
+    {
+        if (!isGyroSupported) return;
+
+        // The calibration quaternion is the inverse of the current gyro attitude.
+        // This effectively sets the current orientation as the "zero" or "neutral" point.
+        calibrationQuaternion = Quaternion.Inverse(Input.gyro.attitude);
+        UpdateStatus("Calibrated! Rotate device to control.");
+        Debug.Log("Gyroscope calibrated.");
+    }
+
+
+
+    /// <summary>
+    /// Reads the gyroscope data, applies transformations and smoothing, and updates the object's rotation.
+    /// </summary>
+    private void UpdateRotation()
+    {
+        // 1. Get raw rotation from the device
+        Quaternion gyroAttitude = Input.gyro.attitude;
+
+        // 2. Apply calibration
+        // Multiply by the calibration quaternion to offset the initial rotation.
+        Quaternion calibratedAttitude = calibrationQuaternion * gyroAttitude;
+
+        // 3. Convert from right-handed to left-handed coordinate system (Unity's system)
+        // and remap axes for a standard landscape view.
+        // The specific conversion depends on the desired control scheme.
+        // This example maps:
+        // - Device Y rotation (Yaw) -> Object Y rotation
+        // - Device X rotation (Pitch) -> Object X rotation
+        // - Device Z rotation (Roll) -> Object Z rotation
+        Quaternion mappedRotation = new Quaternion(calibratedAttitude.x, calibratedAttitude.y, -calibratedAttitude.z, -calibratedAttitude.w);
+
+        // 4. Apply smoothing (Low-pass filter)
+        // This reduces jitter from noisy sensor data for a smoother visual rotation.
+        transform.rotation = Quaternion.Slerp(transform.rotation, mappedRotation, (1 - smoothingFactor) * sensitivity);
+    }
+    #endregion
+
+    #region Utility Methods
+    /// <summary>
+    /// Updates the status text UI element if it's assigned.
+    /// </summary>
+    /// <param name="message">The message to display.</param>
+    private void UpdateStatus(string message)
+    {
+        if (statusText != null)
+        {
+            statusText.text = message;
+        }
+    }
+    #endregion
+}

@@ -1,0 +1,144 @@
+{
+  "id": "2500c663-66b9-4c77-91df-f7eb7fb58bfd",
+  "title": "Gyro-Controlled Mobile Racing Game Development Plan",
+  "description": "A comprehensive development plan for creating a single-player, time-trial mobile racing game. The core feature is gyroscope-based steering, targeting iOS and Android platforms. The Minimum Viable Product (MVP) scope includes one playable car, one race track, and a basic user interface for gameplay and navigation. This plan outlines all phases from initial analysis and design to deployment and post-launch operations.",
+  "tasks": [
+    {
+      "id": "task_001",
+      "title": "Finalize Project Scope and MVP Definition",
+      "description": "Formally document the MVP features, target platforms (iOS/Android), and core gameplay mechanics. - Acceptance Criteria: - A signed-off scope document is created. - MVP feature list is finalized (1 car, 1 track, gyro steering, basic UI). - Technical and design constraints are identified.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [],
+      "estimated_hours": 8.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:29:56.939725",
+      "metadata": {}
+    },
+    {
+      "id": "task_002",
+      "title": "Technology Stack Selection and Feasibility",
+      "description": "Select and confirm the game engine (e.g., Unity, Unreal) and any necessary plugins or libraries. Assess the technical feasibility of gyroscope controls on target devices. - Acceptance Criteria: - Game engine is selected and documented. - A report confirms feasibility of core mechanics. - List of required assets/plugins is created.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 6.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:30:22.015941",
+      "metadata": {}
+    },
+    {
+      "id": "task_003",
+      "title": "Risk Assessment and Mitigation Planning",
+      "description": "Identify potential risks such as inconsistent gyro performance across devices, performance bottlenecks, and scope creep. Develop mitigation strategies for each identified risk. - Acceptance Criteria: - A risk register is created. - Mitigation plans are documented for high-priority risks. - Contingency time is factored into the overall project timeline.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 4.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:31:13.525043",
+      "metadata": {}
+    },
+    {
+      "id": "task_004",
+      "title": "Game Architecture Design",
+      "description": "Design the high-level software architecture, including scene management, game state machine (Menu, Play, Paused, End), and communication between core systems (Input, Physics, UI). - Acceptance Criteria: - Architecture diagrams are created. - Core classes and their responsibilities are defined. - Data flow between systems is documented.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_002"
+      ],
+      "estimated_hours": 12.0,
+      "complexity": "complex",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:31:56.708280",
+      "metadata": {}
+    },
+    {
+      "id": "task_005",
+      "title": "UI/UX Wireframing and Design",
+      "description": "Create wireframes and mockups for all game screens: Main Menu, In-Game HUD (speed, time), Pause Menu, and Post-Race Results screen. - Acceptance Criteria: - Low-fidelity wireframes for all screens are approved. - High-fidelity mockups with visual design are created. - A UI style guide is established.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:33:21.214717",
+      "metadata": {}
+    },
+    {
+      "id": "task_006",
+      "title": "Local Data Storage Design (High Scores)",
+      "description": "Design a simple schema for storing player data locally, such as best lap times. - Acceptance Criteria: - Data structure for high scores is defined. - Chosen storage mechanism (e.g., Unity's PlayerPrefs, JSON file) is documented.",
+      "priority": 5,
+      "status": "failed",
+      "dependencies": [
+        "task_004"
+      ],
+      "estimated_hours": 2.0,
+      "complexity": "simple",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:34:26.736996",
+      "metadata": {}
+    },
+    {
+      "id": "task_007",
+      "title": "Setup Project Environment and Version Control",
+      "description": "Create the new project in the selected game engine. Initialize a Git repository with a proper .gitignore file and define the project's folder structure. - Acceptance Criteria: - Game engine project is created and configured. - Git repository is initialized and pushed to a remote. - Standard folder structure is in place.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_002"
+      ],
+      "estimated_hours": 3.0,
+      "complexity": "simple",
+      "agent_type": "ops_agent",
+      "created_at": "2025-08-17T02:35:15.714495",
+      "metadata": {}
+    },
+    {
+      "id": "task_008",
+      "title": "Develop Game State Manager",
+      "description": "Implement the core game state machine to manage transitions between Main Menu, Gameplay, Paused, and Game Over states. - Acceptance Criteria: - State machine correctly handles loading scenes. - Game state can be switched programmatically. - System prevents invalid state transitions.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_004",
+        "task_007"
+      ],
+      "estimated_hours": 8.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:35:17.618314",
+      "metadata": {}
+    },
+    {
+      "id": "task_009",
+      "title": "Create 3D Model for Player Car",
+      "description": "Model, texture, and rig the 3D player car. Ensure the model is optimized for mobile performance. - Acceptance Criteria: - A low-polygon car model is created. - Textures and materials are applied. - The model is exported in a format compatible with the game engine.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 24.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-17T02:36:22.121370",
+      "metadata": {}
+    }
+  ],
+  "created_at": "2025-08-17T02:29:56.939725",
+  "total_estimated_hours": null,
+  "complexity_distribution": {}
+}

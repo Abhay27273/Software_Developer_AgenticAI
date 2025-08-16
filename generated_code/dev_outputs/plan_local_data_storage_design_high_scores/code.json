@@ -1,0 +1,14 @@
+{
+  "scores": [
+    {
+      "playerName": "ACE",
+      "lapTime": 75.431,
+      "timestamp": "2023-10-27T10:30:00Z"
+    },
+    {
+      "playerName": "VIP",
+      "lapTime": 78.129,
+      "timestamp": "2023-10-27T09:15:00Z"
+    }
+  ]
+}

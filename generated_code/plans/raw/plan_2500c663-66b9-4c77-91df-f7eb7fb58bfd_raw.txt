@@ -1,0 +1,308 @@
+```json
+{
+  "plan_title": "Gyro-Controlled Mobile Racing Game Development Plan",
+  "plan_description": "A comprehensive development plan for creating a single-player, time-trial mobile racing game. The core feature is gyroscope-based steering, targeting iOS and Android platforms. The Minimum Viable Product (MVP) scope includes one playable car, one race track, and a basic user interface for gameplay and navigation. This plan outlines all phases from initial analysis and design to deployment and post-launch operations.",
+  "tasks": [
+    {
+      "id": "task_001",
+      "title": "Finalize Project Scope and MVP Definition",
+      "description": "Formally document the MVP features, target platforms (iOS/Android), and core gameplay mechanics. - Acceptance Criteria: - A signed-off scope document is created. - MVP feature list is finalized (1 car, 1 track, gyro steering, basic UI). - Technical and design constraints are identified.",
+      "priority": 10,
+      "dependencies": [],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_002",
+      "title": "Technology Stack Selection and Feasibility",
+      "description": "Select and confirm the game engine (e.g., Unity, Unreal) and any necessary plugins or libraries. Assess the technical feasibility of gyroscope controls on target devices. - Acceptance Criteria: - Game engine is selected and documented. - A report confirms feasibility of core mechanics. - List of required assets/plugins is created.",
+      "priority": 10,
+      "dependencies": ["task_001"],
+      "estimated_hours": 6,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_003",
+      "title": "Risk Assessment and Mitigation Planning",
+      "description": "Identify potential risks such as inconsistent gyro performance across devices, performance bottlenecks, and scope creep. Develop mitigation strategies for each identified risk. - Acceptance Criteria: - A risk register is created. - Mitigation plans are documented for high-priority risks. - Contingency time is factored into the overall project timeline.",
+      "priority": 8,
+      "dependencies": ["task_001"],
+      "estimated_hours": 4,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_004",
+      "title": "Game Architecture Design",
+      "description": "Design the high-level software architecture, including scene management, game state machine (Menu, Play, Paused, End), and communication between core systems (Input, Physics, UI). - Acceptance Criteria: - Architecture diagrams are created. - Core classes and their responsibilities are defined. - Data flow between systems is documented.",
+      "priority": 10,
+      "dependencies": ["task_002"],
+      "estimated_hours": 12,
+      "complexity": "complex",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_005",
+      "title": "UI/UX Wireframing and Design",
+      "description": "Create wireframes and mockups for all game screens: Main Menu, In-Game HUD (speed, time), Pause Menu, and Post-Race Results screen. - Acceptance Criteria: - Low-fidelity wireframes for all screens are approved. - High-fidelity mockups with visual design are created. - A UI style guide is established.",
+      "priority": 8,
+      "dependencies": ["task_001"],
+      "estimated_hours": 16,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_006",
+      "title": "Local Data Storage Design (High Scores)",
+      "description": "Design a simple schema for storing player data locally, such as best lap times. - Acceptance Criteria: - Data structure for high scores is defined. - Chosen storage mechanism (e.g., Unity's PlayerPrefs, JSON file) is documented.",
+      "priority": 5,
+      "dependencies": ["task_004"],
+      "estimated_hours": 2,
+      "complexity": "simple",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_007",
+      "title": "Setup Project Environment and Version Control",
+      "description": "Create the new project in the selected game engine. Initialize a Git repository with a proper .gitignore file and define the project's folder structure. - Acceptance Criteria: - Game engine project is created and configured. - Git repository is initialized and pushed to a remote. - Standard folder structure is in place.",
+      "priority": 10,
+      "dependencies": ["task_002"],
+      "estimated_hours": 3,
+      "complexity": "simple",
+      "agent_type": "ops_agent"
+    },
+    {
+      "id": "task_008",
+      "title": "Develop Game State Manager",
+      "description": "Implement the core game state machine to manage transitions between Main Menu, Gameplay, Paused, and Game Over states. - Acceptance Criteria: - State machine correctly handles loading scenes. - Game state can be switched programmatically. - System prevents invalid state transitions.",
+      "priority": 10,
+      "dependencies": ["task_004", "task_007"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_009",
+      "title": "Create 3D Model for Player Car",
+      "description": "Model, texture, and rig the 3D player car. Ensure the model is optimized for mobile performance. - Acceptance Criteria: - A low-polygon car model is created. - Textures and materials are applied. - The model is exported in a format compatible with the game engine.",
+      "priority": 8,
+      "dependencies": ["task_001"],
+      "estimated_hours": 24,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_010",
+      "title": "Create 3D Model for Race Track",
+      "description": "Model and texture the race track environment, including the road, barriers, and simple scenery. Set up colliders for the track boundaries. - Acceptance Criteria: - A complete, closed-loop track model is created. - Textures are applied for visual appeal. - Physics colliders are correctly placed on track surfaces.",
+      "priority": 8,
+      "dependencies": ["task_001"],
+      "estimated_hours": 32,
+      "complexity": "complex",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_011",
+      "title": "Develop Input Manager for Gyro and Touch",
+      "description": "Implement a system to read and process device gyroscope data for steering. Also, handle on-screen touch inputs for acceleration and braking. - Acceptance Criteria: - System correctly reads and normalizes gyroscope input. - On-screen buttons for gas/brake are functional. - An API is exposed for the car controller to consume these inputs.",
+      "priority": 10,
+      "dependencies": ["task_008"],
+      "estimated_hours": 12,
+      "complexity": "complex",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_012",
+      "title": "Implement Car Physics and Controller",
+      "description": "Develop the car controller script that applies forces for acceleration, braking, and steering based on the Input Manager. Configure physics components (e.g., wheel colliders, rigidbody). - Acceptance Criteria: - Car accelerates and brakes based on touch input. - Car steers realistically based on gyro input. - Physics parameters are tunable for better game feel.",
+      "priority": 10,
+      "dependencies": ["task_009", "task_011"],
+      "estimated_hours": 24,
+      "complexity": "expert",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_013",
+      "title": "Implement Lap and Time Tracking System",
+      "description": "Create a system to track the player's lap time. This includes implementing start/finish line detection and checkpoints if necessary. - Acceptance Criteria: - A timer starts when the car crosses the start line. - Lap time is recorded upon completing a lap. - The system can handle multiple laps.",
+      "priority": 8,
+      "dependencies": ["task_010", "task_012"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_014",
+      "title": "Develop Main Menu UI",
+      "description": "Implement the main menu screen based on the UI/UX design. Include a 'Start Race' button and a 'Quit' button. - Acceptance Criteria: - Main menu scene is created. - UI elements match the approved design. - 'Start Race' button loads the gameplay scene.",
+      "priority": 8,
+      "dependencies": ["task_005", "task_008"],
+      "estimated_hours": 6,
+      "complexity": "simple",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_015",
+      "title": "Develop In-Game HUD UI",
+      "description": "Implement the heads-up display for the gameplay scene, showing current speed and lap time. - Acceptance Criteria: - HUD elements are displayed during gameplay. - Speed display updates in real-time based on car physics. - Lap timer updates based on the tracking system.",
+      "priority": 8,
+      "dependencies": ["task_005", "task_012", "task_013"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_016",
+      "title": "Develop Pause and Results Screen UI",
+      "description": "Implement the UI for the pause menu (Resume, Quit) and the post-race results screen (Final Time, Restart). - Acceptance Criteria: - Game can be paused and resumed. - Results screen displays the correct final time. - Restart button reloads the gameplay scene.",
+      "priority": 8,
+      "dependencies": ["task_005", "task_008", "task_013"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_017",
+      "title": "Implement Local High Score System",
+      "description": "Implement the logic to save and load the player's best lap time using the designed local storage mechanism. - Acceptance Criteria: - Best lap time is saved after a new record is set. - Best lap time is loaded and displayed on the menu or results screen.",
+      "priority": 5,
+      "dependencies": ["task_006", "task_016"],
+      "estimated_hours": 6,
+      "complexity": "simple",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_018",
+      "title": "Integrate Audio (Engine, Brakes)",
+      "description": "Add basic sound effects for the car engine (pitch shifting with speed), braking/skidding, and UI interactions. - Acceptance Criteria: - Engine sound plays and its pitch changes with car speed. - Braking sound effect is triggered. - UI buttons have click sounds.",
+      "priority": 5,
+      "dependencies": ["task_012", "task_014"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_019",
+      "title": "Write Unit Tests for Core Logic",
+      "description": "Implement unit tests for critical, non-MonoBehaviour scripts, such as the time tracking logic and input processing calculations. - Acceptance Criteria: - Unit tests cover the lap time calculation logic. - Core utility functions have 80%+ test coverage.",
+      "priority": 5,
+      "dependencies": ["task_013"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "qa_agent"
+    },
+    {
+      "id": "task_020",
+      "title": "Perform Integration Testing",
+      "description": "Test the interaction between major systems: Input -> Car Controller -> Physics -> UI. - Acceptance Criteria: - Tilting the device correctly steers the car. - HUD updates accurately reflect the car's state. - Game state transitions (menu to game, pausing) work flawlessly.",
+      "priority": 8,
+      "dependencies": ["task_015", "task_016"],
+      "estimated_hours": 16,
+      "complexity": "medium",
+      "agent_type": "qa_agent"
+    },
+    {
+      "id": "task_021",
+      "title": "Perform System and Gameplay Testing",
+      "description": "Conduct end-to-end testing of the full game loop on target devices. Focus on game feel, controls, and identifying bugs. - Acceptance Criteria: - A full race can be completed without critical bugs. - All UI buttons and flows are functional. - A list of identified bugs is created and triaged.",
+      "priority": 8,
+      "dependencies": ["task_020"],
+      "estimated_hours": 16,
+      "complexity": "complex",
+      "agent_type": "qa_agent"
+    },
+    {
+      "id": "task_022",
+      "title": "Perform Performance and Optimization Testing",
+      "description": "Profile the game on a range of target devices (low-end to high-end) to ensure a stable frame rate. Optimize assets and code where necessary. - Acceptance Criteria: - Game maintains a target FPS (e.g., 30+) on minimum spec devices. - Memory usage is within acceptable limits. - Battery drain is monitored and optimized.",
+      "priority": 8,
+      "dependencies": ["task_021"],
+      "estimated_hours": 20,
+      "complexity": "complex",
+      "agent_type": "qa_agent"
+    },
+    {
+      "id": "task_023",
+      "title": "User Acceptance Testing (UAT)",
+      "description": "Gather feedback from a group of test users on gameplay, especially the feel and responsiveness of the gyroscope controls. - Acceptance Criteria: - UAT sessions are conducted with at least 5 users. - Feedback is collected, synthesized, and reviewed. - A plan for addressing critical feedback is created.",
+      "priority": 8,
+      "dependencies": ["task_021"],
+      "estimated_hours": 16,
+      "complexity": "medium",
+      "agent_type": "qa_agent"
+    },
+    {
+      "id": "task_024",
+      "title": "Tuning and Polishing",
+      "description": "Adjust game parameters based on testing feedback. This includes car physics, gyro sensitivity, and UI/UX improvements. - Acceptance Criteria: - Gyro sensitivity is adjusted for a better user experience. - Car handling feels responsive and fun. - All critical and major bugs from QA/UAT are fixed.",
+      "priority": 8,
+      "dependencies": ["task_023"],
+      "estimated_hours": 24,
+      "complexity": "complex",
+      "agent_type": "dev_agent"
+    },
+    {
+      "id": "task_025",
+      "title": "Configure Build Settings for iOS and Android",
+      "description": "Set up the build configurations in the game engine for both target platforms, including icons, splash screens, and package identifiers. - Acceptance Criteria: - Android build configuration is complete. - iOS build configuration is complete. - Development builds can be successfully generated for both platforms.",
+      "priority": 8,
+      "dependencies": ["task_007", "task_024"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "ops_agent"
+    },
+    {
+      "id": "task_026",
+      "title": "Implement CI/CD Pipeline for Automated Builds",
+      "description": "Set up a Continuous Integration/Continuous Deployment pipeline (e.g., Unity Cloud Build, Jenkins, GitHub Actions) to automate the build process for test deployments. - Acceptance Criteria: - A successful build is triggered on every push to the main branch. - Build artifacts are stored and accessible for QA. - Pipeline sends notifications on build success or failure.",
+      "priority": 5,
+      "dependencies": ["task_025"],
+      "estimated_hours": 16,
+      "complexity": "complex",
+      "agent_type": "ops_agent"
+    },
+    {
+      "id": "task_027",
+      "title": "Prepare App Store and Google Play Listings",
+      "description": "Create all required marketing assets for store listings, including screenshots, promo videos, and descriptive text. - Acceptance Criteria: - App icon and screenshots are created. - App description and release notes are written. - Privacy policy is drafted and available.",
+      "priority": 5,
+      "dependencies": ["task_024"],
+      "estimated_hours": 10,
+      "complexity": "medium",
+      "agent_type": "ops_agent"
+    },
+    {
+      "id": "task_028",
+      "title": "Deploy Release Candidate to Test Platforms",
+      "description": "Deploy the final release candidate build to internal testing tracks on Google Play (Internal Testing) and Apple TestFlight. - Acceptance Criteria: - Build is successfully uploaded and processed by both platforms. - Internal QA team can download and install the app from the stores. - Final verification is performed on the store build.",
+      "priority": 10,
+      "dependencies": ["task_026", "task_027"],
+      "estimated_hours": 8,
+      "complexity": "medium",
+      "agent_type": "ops_agent"
+    },
+    {
+      "id": "task_029",
+      "title": "Submit Final App for Review",
+      "description": "Submit the verified application to the Apple App Store and Google Play Store for official review. - Acceptance Criteria: - App is submitted to Google Play and is awaiting review. - App is submitted to Apple App Store Connect and is awaiting review. - All submission forms are filled out correctly.",
+      "priority": 10,
+      "dependencies": ["task_028"],
+      "estimated_hours": 4,
+      "complexity": "simple",
+      "agent_type": "ops_agent"
+    },
+    {
+      "id": "task_030",
+      "title": "Create Technical and User Documentation",
+      "description": "Document the final codebase, architecture, and build process for future maintenance. Create a simple user guide if necessary. - Acceptance Criteria: - Code is well-commented. - A README file details the project setup and build process. - High-level architecture documentation is finalized.",
+      "priority": 1,
+      "dependencies": ["task_024"],
+      "estimated_hours": 12,
+      "complexity": "medium",
+      "agent_type": "dev_agent"
+    }
+  ]
+}
+```

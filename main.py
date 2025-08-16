@@ -237,24 +237,11 @@ async def websocket_endpoint(websocket: WebSocket):
                                                 break
                                     _save_plan(planner_agent.current_plan) # Save updated plan with QA result
 
+                                    # Check QA result status
                                     if qa_task_result.status == TaskStatus.COMPLETED:
-                                        # NEW: Trigger Ops Agent after successful QA
-                                        await websocket_manager.send_personal_message({
-                                            "type": "qa_task_complete_init_ops",
-                                            "task_id": qa_task_result.id,
-                                            "title": qa_task_result.title,
-                                            "message": f"QA for '{qa_task_result.title}' completed. Initiating Ops for deployment...",
-                                            "timestamp": datetime.now().isoformat()
-                                        }, websocket)
-                                        
-                                        ops_task_result = await ops_agent.execute_task(qa_task_result)
-                                        if planner_agent.current_plan:
-                                            for idx, p_task in enumerate(planner_agent.current_plan.tasks):
-                                                if p_task.id == qa_task_result.id:
-                                                    planner_agent.current_plan.tasks[idx] = ops_task_result
-                                                    break
-                                        _save_plan(planner_agent.current_plan)
-
+                                        # Note: OpsAgent will be triggered after ALL dev tasks are completed
+                                        # Individual QA completion no longer triggers Ops
+                                        pass
                                     else: # QA task failed
                                         await websocket_manager.send_personal_message({
                                             "type": "qa_task_failed",
@@ -348,9 +335,53 @@ async def websocket_endpoint(websocket: WebSocket):
                 # After all tasks are processed or an error occurred during processing
                 if planner_agent.current_plan:
                     total_tasks_processed = len(planner_agent.current_plan.tasks) if planner_agent.current_plan.tasks else 0
+                    
+                    # Check if we have completed dev tasks that need deployment
+                    dev_tasks_completed = [
+                        task for task in planner_agent.current_plan.tasks 
+                        if task.agent_type == "dev_agent" and task.status == TaskStatus.COMPLETED
+                    ]
+                    
+                    # Trigger OpsAgent only if there are completed dev tasks
+                    if dev_tasks_completed:
+                        await websocket_manager.send_personal_message({
+                            "type": "all_dev_tasks_complete_init_ops",
+                            "message": f"All development tasks completed. Initiating production deployment...",
+                            "dev_tasks_count": len(dev_tasks_completed),
+                            "timestamp": datetime.now().isoformat()
+                        }, websocket)
+                        
+                        # Create a deployment task for OpsAgent
+                        deployment_task = Task(
+                            id="deployment_final",
+                            title="Production Deployment",
+                            description=f"Deploy all completed development work to production. {len(dev_tasks_completed)} components ready for deployment.",
+                            priority=10,  # Highest priority
+                            status=TaskStatus.PENDING,
+                            dependencies=[],
+                            estimated_hours=1.0,
+                            complexity="medium",
+                            agent_type="ops_agent"
+                        )
+                        
+                        # Execute OpsAgent deployment
+                        ops_result = await ops_agent.execute_task(deployment_task)
+                        
+                        # Add deployment task to plan
+                        planner_agent.current_plan.tasks.append(ops_result)
+                        _save_plan(planner_agent.current_plan)
+                        
+                        await websocket_manager.send_personal_message({
+                            "type": "ops_deployment_status",
+                            "task_id": deployment_task.id,
+                            "status": ops_result.status.value,
+                            "message": f"Production deployment {ops_result.status.value.lower()}: {ops_result.result}",
+                            "timestamp": datetime.now().isoformat()
+                        }, websocket)
+                    
                     await websocket_manager.send_personal_message({
                         "type": "planning_completed",
-                        "message": f"All {total_tasks_processed} tasks for plan '{planner_agent.current_plan.title}' processed.",
+                        "message": f"All {total_tasks_processed} tasks for plan '{planner_agent.current_plan.title}' processed. {'Production deployment completed.' if dev_tasks_completed else ''}",
                         "plan": planner_agent.current_plan.to_dict(),
                         "timestamp": datetime.now().isoformat()
                     }, websocket)

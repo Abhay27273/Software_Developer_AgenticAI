@@ -1,0 +1,1990 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot & Code Viewer</title>
+    <!-- Inter font from Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Prism.js for syntax highlighting - using a light theme -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+    <!-- Optional: Prism.js line numbers plugin for better code viewing -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
+    <!-- Font Awesome for icons (copy, download) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        /* CSS Variables for consistent theming */
+        :root {
+            --bg-color: #f8f9fa; /* Overall light background */
+            --sidebar-bg: #ffffff; /* White sidebar */
+            --main-bg: #f8f9fa; /* Main content background */
+            --border-color: #e0e0e0; /* Subtle border */
+            --text-primary: #212529; /* Dark text for contrast */
+            --text-secondary: #6c757d; /* Muted secondary text */
+            --accent-color: #4a90e2; /* A clean, modern blue */
+            --accent-hover: #3a7bd5; /* Darker blue on hover */
+            --button-bg-secondary: #e9ecef; /* Light grey for secondary buttons */
+            --button-text-secondary: #343a40; /* Dark text for secondary buttons */
+            --button-hover-secondary: #dae0e5; /* Lighter grey on hover */
+            --chat-user-bg: #e6f0fa; /* Light blue for user messages */
+            --chat-ai-bg: #ffffff; /* White for AI messages */
+            --shadow-light: 0 1px 4px rgba(0, 0, 0, 0.06); /* Very subtle shadow */
+            --shadow-medium: 0 3px 10px rgba(0, 0, 0, 0.1); /* Medium shadow */
+            --log-info: #28a745; /* Green for info */
+            --log-warning: #ffc107; /* Yellow for warning */
+            --log-error: #dc3545; /* Red for error */
+            --font-primary: 'Inter', sans-serif;
+            --font-monospace: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            --border-radius-sm: 4px;
+            --border-radius-md: 8px;
+            --border-radius-lg: 12px;
+            /* Agent Status Colors */
+            --status-idle: #6c757d; /* Grey */
+            --status-running: #4a90e2; /* Blue */
+            --status-error: #dc3545; /* Red */
+            --status-complete: #28a745; /* Green */
+        }
+        /* Base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: var(--font-primary);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden; /* Prevent body scrollbar */
+            display: flex;
+            flex-direction: column;
+            padding: 15px; /* Added padding to body */
+        }
+        /* App Container */
+        .app-container {
+            display: flex;
+            flex: 1;
+            background-color: var(--main-bg);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden; /* Ensure content inside doesn't cause app-container to scroll */
+            /* Removed margin: 15px; */
+            box-shadow: var(--shadow-medium);
+        }
+        /* --- Left Sidebar --- */
+        .left-sidebar {
+            width: 280px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            overflow-y: auto; /* Allow sidebar content to scroll */
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-header .logo-icon {
+            font-size: 24px;
+            color: var(--accent-color);
+        }
+        .sidebar-section {
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .sidebar-section:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .sidebar-section h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .session-list, .file-tree {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .session-item, .file-item {
+            padding: 10px 15px;
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary);
+        }
+        .session-item:hover, .file-item:hover {
+            background-color: var(--button-bg-secondary);
+            color: var(--text-primary);
+        }
+        .session-item.active {
+            background-color: var(--accent-color);
+            color: white;
+            font-weight: 500;
+            box-shadow: var(--shadow-light);
+        }
+        .file-item.selected {
+            background-color: #e0f0ff; /* Lighter accent background */
+            color: var(--accent-color); /* Accent color for text */
+            font-weight: 500;
+        }
+        /* Project Name Editing */
+        .project-name-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .project-name-display .edit-icon {
+            font-size: 14px;
+            color: var(--text-secondary);
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .project-name-display:hover .edit-icon {
+            opacity: 1;
+        }
+        .project-name-input {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            padding: 4px 8px;
+            font-size: 14px;
+            font-family: var(--font-primary);
+            outline: none;
+        }
+        /* New Project/Clear Chat Button */
+        #new-project-btn {
+            background-color: var(--button-bg-secondary);
+            color: var(--button-text-secondary);
+            border: 1px solid var(--border-color);
+            padding: 10px 15px;
+            border-radius: var(--border-radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+        #new-project-btn:hover {
+            background-color: var(--button-hover-secondary);
+            box-shadow: var(--shadow-light);
+        }
+        /* File Tree Specifics */
+        .file-tree .directory > .file-item {
+            font-weight: 600;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .file-tree .directory > .file-item .icon-folder {
+            transition: transform 0.2s ease-in-out;
+            margin-right: 5px; /* Space between icon and text */
+        }
+        .file-tree .file-item .icon-file {
+            margin-right: 5px; /* Space between icon and text */
+        }
+        .file-tree .directory.collapsed > .file-item .icon-folder {
+            transform: rotate(-90deg);
+        }
+        .file-tree .directory .children-container {
+            padding-left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .file-tree .directory.collapsed .children-container {
+            display: none;
+        }
+        /* Context Menu */
+        #context-menu {
+            position: fixed;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-medium);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            padding: 5px 0;
+        }
+        .context-menu-item {
+            padding: 8px 15px;
+            font-size: 14px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .context-menu-item:hover {
+            background-color: var(--button-bg-secondary);
+        }
+        .context-menu-item i {
+            width: 18px; /* Align icons */
+            text-align: center;
+        }
+        /* --- Main Content (Chatbot Area & File Viewer Container) --- */
+        .main-content {
+            flex: 1;
+            display: flex; /* Make it a flex container */
+            flex-direction: column; /* Stack children vertically */
+            background-color: var(--main-bg);
+            padding: 30px 50px 20px 50px; /* Adjusted padding: top, right, bottom (less), left */
+            overflow: hidden; /* Main content itself should not scroll */
+        }
+        /* Content Area for Chat/Agent/File Viewer */
+        .content-area {
+            flex: 1; /* Takes all available vertical space */
+            display: flex; /* Default to column for single view */
+            flex-direction: column;
+            overflow-y: auto; /* Allow this area to scroll */
+            position: relative; /* For absolute positioning of sub-panels if needed */
+        }
+        /* Split view styles for content-area */
+        .content-area.split-active {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two equal columns */
+            gap: 30px; /* Space between chat and file viewer */
+            overflow-y: hidden; /* Content area itself doesn't scroll, children do */
+        }
+        /* Hide welcome view in split mode */
+        .content-area.split-active .welcome-view {
+            display: none !important;
+        }
+        /* Chat Panel & Agent Output Panel in split view - these will be in the left column */
+        .content-area.split-active .chat-panel,
+        .content-area.split-active .agent-output-panel {
+            display: flex; /* Ensure it's visible if active */
+            flex-direction: column;
+            overflow-y: auto; /* Allow content to scroll within its column */
+            max-width: none; /* Remove centering/max-width */
+            margin: 0;
+            padding: 0; /* Reset padding from default .main-content */
+            height: 100%; /* Take full height of grid cell */
+        }
+        /* File Viewer Panel in split view - this will be in the right column */
+        .content-area.split-active .file-viewer-panel {
+            position: static; /* Place it in the grid, no longer absolute overlay */
+            display: flex; /* Make it visible and take its place in the grid */
+            flex-direction: column;
+            padding: 0; /* Remove padding here, handled by main-content container */
+            overflow-y: hidden; /* Content inside pre/code will scroll */
+            height: 100%; /* Take full height of grid cell */
+            border-left: 1px solid var(--border-color); /* Thin line separator */
+            padding-left: 30px; /* Space after the separator */
+        }
+        /* Chat History - always scrollable within its panel */
+        .chat-history {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 800px; /* Limit chat width in single view */
+            margin: 0 auto; /* Center chat content in single view */
+            width: 100%;
+            padding-top: 20px; /* Padding above first message */
+            padding-bottom: 20px; /* Padding below last message */
+            overflow-y: auto; /* Always scrollable */
+        }
+        /* Chat History in split view - remove max-width and margin auto */
+        .content-area.split-active .chat-history {
+            max-width: none;
+            margin: 0;
+            padding: 0; /* Reset internal padding if main-content has it */
+        }
+        /* Agent Output Panel */
+        .agent-output-panel {
+            flex: 1; /* Takes available space */
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 800px; /* Limit width in single view */
+            margin: 0 auto; /* Center in single view */
+            width: 100%;
+            padding-top: 20px;
+            padding-bottom: 20px;
+            overflow-y: auto; /* Always scrollable */
+        }
+        .agent-output-content {
+            font-family: var(--font-monospace);
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            background-color: #f0f2f5; /* Slightly darker background for output */
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: var(--border-radius-md);
+            color: var(--text-primary);
+            min-height: 150px; /* More substantial min-height */
+            overflow-y: auto;
+            box-shadow: var(--shadow-light); /* Subtle shadow */
+        }
+        .chat-message {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-light);
+            line-height: 1.6;
+            font-size: 15px;
+            white-space: pre-wrap; /* Preserve formatting */
+            word-break: break-word; /* Break long words */
+        }
+        .chat-message.user {
+            background-color: var(--chat-user-bg);
+            align-self: flex-end; /* Align user messages to the right */
+            margin-left: auto; /* Push to right */
+            border-bottom-right-radius: 0; /* Pointy corner for user */
+        }
+        .chat-message.ai {
+            background-color: var(--chat-ai-bg);
+            align-self: flex-start; /* Align AI messages to the left */
+            margin-right: auto; /* Push to left */
+            border-bottom-left-radius: 0; /* Pointy corner for AI */
+            border: 1px solid var(--border-color); /* Subtle border for AI messages */
+        }
+        .chat-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background-color: var(--accent-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 600;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .chat-avatar.user { background-color: #6c757d; } /* Muted grey for user avatar */
+        .chat-avatar.ai { background-color: var(--accent-color); } /* Accent for AI avatar */
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            margin-left: 60px; /* Align with AI messages */
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--text-secondary);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        /* --- Input Form Area --- */
+        .input-area-container {
+            /* No longer absolutely positioned relative to main-content */
+            position: static; /* Or simply remove position property */
+            flex-shrink: 0; /* Prevents it from shrinking */
+            margin-top: auto; /* Pushes it to the bottom of the flex container */
+            padding: 20px 50px; /* Consistent padding */
+            background: var(--main-bg); /* Solid background for simpler layout */
+            z-index: 10;
+            border-top: 1px solid var(--border-color);
+        }
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            padding: 15px;
+            box-shadow: var(--shadow-medium);
+            display: flex;
+            flex-direction: column; /* Stack input and tabs */
+            gap: 10px;
+        }
+        .input-top-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #requirements-input {
+            flex: 1; /* Take remaining space */
+            border: none;
+            padding: 10px;
+            font-size: 16px;
+            font-family: var(--font-primary);
+            resize: none;
+            min-height: 50px; /* Adjusted min-height */
+            max-height: 150px; /* Limit max height for input */
+            outline: none;
+            background: transparent;
+            color: var(--text-primary);
+            overflow-y: auto; /* Allow scrolling for long input */
+        }
+        #requirements-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+        #send-message-btn {
+            padding: 10px 20px;
+            border: none;
+            background-color: var(--accent-color);
+            color: white;
+            border-radius: var(--border-radius-md);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            box-shadow: var(--shadow-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #send-message-btn:hover:not(:disabled) {
+            background-color: var(--accent-hover);
+            box-shadow: var(--shadow-medium);
+        }
+        #send-message-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #a0c9f0;
+            box-shadow: none;
+        }
+        .agent-tabs {
+            display: flex;
+            gap: 10px; /* Space between tabs */
+            flex-wrap: wrap; /* Allow tabs to wrap on smaller screens */
+            justify-content: flex-start; /* Align tabs to the left */
+            margin-top: 5px; /* Small space above tabs */
+        }
+        .agent-tab {
+            padding: 8px 18px; /* More horizontal padding */
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background-color: var(--button-bg-secondary);
+            color: var(--button-text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .agent-tab:hover:not(.active):not(.disabled) {
+            background-color: var(--button-hover-secondary);
+            border-color: #c9d2da;
+        }
+        .agent-tab.active {
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+            box-shadow: var(--shadow-light);
+        }
+        .agent-tab.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: #f0f0f0;
+            color: #a0a0a0;
+            border-color: #e0e0e0;
+        }
+        /* Agent Status Indicator Dot */
+        .agent-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--status-idle);
+            transition: background-color 0.3s;
+        }
+        .agent-status-dot.running { background-color: var(--status-running); }
+        .agent-status-dot.complete { background-color: var(--status-complete); }
+        .agent-status-dot.error { background-color: var(--status-error); }
+        /* File Viewer Panel Styles */
+        /* Default state: hidden and overlaying content-area */
+        .file-viewer-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--main-bg);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            padding: 30px 50px;
+        }
+        /* In split view, it becomes static within the grid */
+        .content-area.split-active .file-viewer-panel {
+            position: static;
+            display: flex;
+            flex-direction: column;
+            padding: 0; /* Padding handled by content-area grid container */
+            overflow-y: hidden;
+            height: 100%;
+        }
+        .file-viewer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        #file-viewer-filename {
+            font-family: var(--font-monospace);
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+        .file-viewer-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 18px; /* Slightly smaller icons for file actions */
+            color: var(--text-secondary);
+            padding: 8px;
+            border-radius: var(--border-radius-sm);
+            transition: color 0.2s, background-color 0.2s;
+        }
+        .file-viewer-actions button:hover {
+            color: var(--accent-color);
+            background-color: #f0f0f0;
+        }
+        .file-viewer-content {
+            flex: 1;
+            background-color: #f0f2f5;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            overflow: auto;
+            box-shadow: var(--shadow-light);
+        }
+        .file-viewer-content pre {
+            padding: 20px;
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .file-viewer-content code {
+            font-family: var(--font-monospace);
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+        /* Code Block Copy Button (inside chat messages) */
+        .chat-message pre {
+            position: relative;
+            background-color: #e9ecef; /* Light grey background for code */
+            padding: 15px;
+            border-radius: var(--border-radius-md);
+            margin-top: 10px;
+            overflow-x: auto; /* Allow horizontal scrolling for wide code */
+        }
+        .chat-message pre code {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #333;
+        }
+        .chat-message .copy-code-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: rgba(0,0,0,0.4);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            padding: 5px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        .chat-message pre:hover .copy-code-btn {
+            opacity: 1;
+        }
+        .chat-message .copy-code-btn:hover {
+            background-color: rgba(0,0,0,0.6);
+        }
+        /* Logs and Connection Status (Fixed position, ensure they are not duplicated in HTML) */
+        #connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 1000;
+            box-shadow: var(--shadow-light);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        #connection-status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        #connection-status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #logs-container {
+            display: none !important; /* HIDE THE LOGS PANEL */
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            max-width: 380px;
+            max-height: 180px;
+            overflow-y: auto;
+            background: rgba(33, 37, 41, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: var(--border-radius-md);
+            font-family: var(--font-monospace);
+            font-size: 12px;
+            z-index: 1000;
+            box-shadow: var(--shadow-medium);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        .log-info { color: var(--log-info); }
+        .log-warning { color: var(--log-warning); }
+        .log-error { color: var(--log-error); }
+        /* Custom Message Box (replacing alert) */
+        #custom-message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--sidebar-bg);
+            padding: 30px;
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-medium);
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            max-width: 450px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+        #custom-message-content {
+            margin-bottom: 25px;
+            font-size: 17px;
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+        #custom-message-ok-btn {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 10px 25px;
+            border: none;
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            box-shadow: var(--shadow-light);
+        }
+        #custom-message-ok-btn:hover {
+            background-color: var(--accent-hover);
+            box-shadow: var(--shadow-medium);
+        }
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+        /* Responsive Adjustments */
+        @media (max-width: 1024px) {
+            .app-container {
+                margin: 10px;
+            }
+            .left-sidebar {
+                width: 250px;
+                padding: 15px;
+                gap: 20px;
+            }
+            .main-content {
+                padding: 20px 30px;
+            }
+            .input-area-container {
+                padding: 15px 30px;
+            }
+            .input-wrapper {
+                padding: 12px;
+            }
+            #requirements-input {
+                font-size: 15px;
+                min-height: 40px;
+            }
+            #send-message-btn {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+            .chat-history, .agent-output-panel {
+                max-width: 600px;
+            }
+            .file-viewer-panel {
+                padding: 20px 30px;
+            }
+            #logs-container {
+                max-width: 300px;
+                max-height: 150px;
+                font-size: 11px;
+            }
+            #connection-status {
+                font-size: 13px;
+                padding: 6px 12px;
+            }
+            .content-area.split-active {
+                grid-template-columns: 1fr; /* Stack columns on smaller tablets */
+                gap: 20px;
+                overflow-y: auto; /* Allow scrolling for stacked content */
+            }
+            .content-area.split-active .chat-panel,
+            .content-area.split-active .agent-output-panel,
+            .content-area.split-active .file-viewer-panel {
+                height: auto; /* Auto height when stacked */
+                max-height: 50vh; /* Limit height of each panel */
+                border-left: none; /* Remove border when stacked */
+                padding-left: 0; /* Remove padding when stacked */
+            }
+        }
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+                margin: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .left-sidebar {
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 15px;
+                max-height: 40vh;
+            }
+            .main-content {
+                flex: 1;
+                min-height: 60vh;
+                padding: 15px 20px;
+            }
+            .input-area-container {
+                padding: 10px 20px;
+            }
+            .input-wrapper {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 10px;
+            }
+            .input-top-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            #send-message-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .chat-history, .agent-output-panel {
+                gap: 15px;
+            }
+            .chat-message {
+                font-size: 14px;
+                padding: 12px;
+            }
+            .chat-avatar {
+                width: 30px;
+                height: 30px;
+                font-size: 16px;
+            }
+            .file-viewer-panel {
+                padding: 15px 20px;
+            }
+            #logs-container, #connection-status {
+                position: static;
+                margin: 10px 20px;
+                max-width: none;
+                max-height: 80px;
+                box-shadow: var(--shadow-light);
+                border: 1px solid var(--border-color);
+            }
+            #connection-status {
+                text-align: center;
+                margin-top: 10px;
+            }
+            .content-area.split-active {
+                grid-template-columns: 1fr; /* Ensure stacking on mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="left-sidebar">
+            <div class="sidebar-header">
+                <span class="logo-icon"><i class="fas fa-robot"></i></span> AI Agent
+            </div>
+
+            <!-- Connection Status moved here for better integration -->
+            <div id="connection-status" class="connection-status">Connecting...</div>
+
+            <div class="sidebar-section">
+                <h3>Projects</h3>
+                <div id="session-list" class="session-list">
+                    <div class="session-item active">
+                        <span class="icon-file"><i class="fas fa-project-diagram"></i></span>
+                        <span id="current-project-name" class="project-name-display">
+                            <span>Current Project</span>
+                            <i class="fas fa-edit edit-icon"></i>
+                        </span>
+                    </div>
+                </div>
+                <button id="new-project-btn"><i class="fas fa-plus-circle"></i> New Project / Clear Chat</button>
+            </div>
+            <div class="sidebar-section">
+                <h3>Generated Files</h3>
+                <div id="file-tree" class="file-tree">
+                    <!-- File tree will be dynamically populated by JS -->
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <!-- New wrapper for scrollable content -->
+            <div class="content-area">
+                <div id="welcome-view" class="welcome-view">
+                    <h1>Hello! How can I assist you today?</h1>
+                    <p>Describe your project requirements or ask a question to get started.</p>
+                </div>
+
+                <!-- Main Chat Panel -->
+                <div id="chat-panel" class="chat-panel">
+                    <div id="chat-history" class="chat-history">
+                        <!-- Chat messages will be dynamically added here -->
+                        <div class="typing-indicator hidden">
+                            <span></span><span></span><span></span> AI is typing...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent Output Panels Container -->
+                <div id="agent-output-panel" class="agent-output-panel hidden">
+                    <div id="pm-agent-output" class="agent-output-content"></div>
+                    <div id="dev-agent-output" class="agent-output-content hidden"></div>
+                    <div id="qa-agent-output" class="agent-output-content hidden"></div>
+                </div>
+
+                <!-- File Viewer Panel (can be side-by-side or overlay) -->
+                <div id="file-viewer-panel" class="file-viewer-panel hidden">
+                    <div class="file-viewer-header">
+                        <span id="file-viewer-filename"></span>
+                        <div class="file-viewer-actions">
+                            <button id="copy-file-btn" title="Copy to Clipboard"><i class="far fa-copy"></i></button>
+                            <button id="download-file-btn" title="Download File"><i class="fas fa-download"></i></button>
+                            <button id="close-file-viewer-btn" title="Close Viewer"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                    <div class="file-viewer-content">
+                        <pre class="line-numbers"><code id="file-content-display" class="language-javascript"></code></pre>
+                    </div>
+                </div>
+            </div> <!-- End of content-area -->
+
+            <div class="input-area-container">
+                <div class="input-wrapper">
+                    <div class="input-top-row">
+                        <textarea id="requirements-input" placeholder="Describe your project requirements or ask a question..." rows="1"></textarea>
+                        <button id="send-message-btn" title="Send Message">
+                            <i class="fas fa-paper-plane"></i> Send
+                        </button>
+                    </div>
+                    <div class="agent-tabs">
+                        <div class="agent-tab active" data-agent="chat">
+                            <span class="agent-status-dot" data-status-agent="chat"></span> Chat
+                        </div>
+                        <div class="agent-tab" data-agent="pm">
+                            <span class="agent-status-dot" data-status-agent="pm"></span> PM Agent
+                        </div>
+                        <div class="agent-tab" data-agent="dev">
+                            <span class="agent-status-dot" data-status-agent="dev"></span> Dev Agent
+                        </div>
+                        <div class="agent-tab" data-agent="qa">
+                            <span class="agent-status-dot" data-status-agent="qa"></span> QA Agent
+                        </div>
+                        <div class="agent-tab disabled" data-agent="ops">
+                            <span class="agent-status-dot" data-status-agent="ops"></span> Ops Agent
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom Message Box (hidden by default, controlled by JS) -->
+    <div id="custom-message-box">
+        <p id="custom-message-content"></p>
+        <button id="custom-message-ok-btn">OK</button>
+    </div>
+
+    <!-- Context Menu for Files -->
+    <div id="context-menu" class="hidden">
+        <div class="context-menu-item" data-action="open"><i class="fas fa-folder-open"></i> Open</div>
+        <div class="context-menu-item" data-action="download"><i class="fas fa-download"></i> Download</div>
+        <div class="context-menu-item" data-action="copy-path"><i class="fas fa-copy"></i> Copy Path</div>
+        <div class="context-menu-item" data-action="delete"><i class="fas fa-trash-alt"></i> Delete</div>
+    </div>
+
+    <!-- Logs Container (hidden from user) -->
+    <div id="logs-container" class="log-container"></div>
+
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <!-- Prism.js core and autoloader for syntax highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+
+    <!-- Your PlanningDashboard.js script -->
+    <script>
+        // PlanningDashboard.js
+        class PlanningDashboard {
+            constructor() {
+                // Initialize state variables
+                this.ws = null;
+                this.currentPlan = null;
+                this.reconnectInterval = 5000;
+                this.maxReconnectAttempts = 5;
+                this.reconnectAttempts = 0;
+                this.isConnecting = false;
+                this.projectFiles = {};
+                this.activeFile = 'welcome';
+                this.activeAgentTab = 'chat'; // Default to chat tab
+                this.logsContainer = null;
+                this.connectionStatus = null;
+                this.messageBox = null; // For custom message box
+                this.mainContent = null; // Reference to the main content area
+                this.contentArea = null; // New reference to the scrollable content area
+                this.typingIndicator = null; // Reference to the typing indicator
+                this.agentStatusDots = {}; // To store references to status dots
+                this.currentProjectNameElement = null; // For project renaming
+                this.contextMenu = null; // For file context menu
+                this.contextMenuTargetFile = null; // Stores the path of the file right-clicked
+                // Setup phase 1: Initialize DOM elements and event listeners
+                this.initializeElements();
+                this.bindEvents();
+                this.setupMarkdownRenderer(); // Setup Marked.js and Prism.js integration
+                // Setup phase 2: Initialize welcome content and render initial state
+                this.initializeMockFiles();
+                // Setup phase 3: Connect to WebSocket and fetch real files
+                setTimeout(() => {
+                    this.connectWebSocket();
+                }, 0);
+            }
+            initializeElements() {
+                // Basic UI controls
+                this.requirementsInput = document.getElementById('requirements-input');
+                this.sendMessageBtn = document.getElementById('send-message-btn');
+                // Main panels
+                this.mainContent = document.querySelector('.main-content');
+                this.contentArea = document.querySelector('.content-area'); // New content area
+                this.welcomeView = document.getElementById('welcome-view');
+                this.chatPanel = document.getElementById('chat-panel');
+                this.chatHistoryContainer = document.getElementById('chat-history');
+                this.agentOutputPanel = document.getElementById('agent-output-panel');
+                this.fileViewerPanel = document.getElementById('file-viewer-panel');
+                // Agent outputs (individual panels)
+                this.pmAgentOutput = document.getElementById('pm-agent-output');
+                this.devAgentOutput = document.getElementById('dev-agent-output');
+                this.qaAgentOutput = document.getElementById('qa-agent-output');
+                // File viewer elements
+                this.fileTree = document.getElementById('file-tree');
+                this.fileViewerFilename = document.getElementById('file-viewer-filename');
+                this.fileContentDisplay = document.getElementById('file-content-display');
+                this.closeFileViewerBtn = document.getElementById('close-file-viewer-btn');
+                this.downloadFileBtn = document.getElementById('download-file-btn');
+                this.copyFileBtn = document.getElementById('copy-file-btn');
+                // Agent tabs
+                this.agentTabs = document.querySelectorAll('.agent-tab');
+                this.agentTabs.forEach(tab => {
+                    const agentType = tab.dataset.agent;
+                    this.agentStatusDots[agentType] = tab.querySelector('.agent-status-dot');
+                });
+                // Typing indicator
+                this.typingIndicator = document.querySelector('.typing-indicator');
+                // Project renaming
+                this.currentProjectNameElement = document.getElementById('current-project-name');
+                // Context menu
+                this.contextMenu = document.getElementById('context-menu');
+                // Initialize logs container
+                this.logsContainer = document.getElementById('logs-container');
+                // Initialize connection status
+                this.connectionStatus = document.getElementById('connection-status');
+                if (!this.connectionStatus) {
+                    this.connectionStatus = document.createElement('div');
+                    this.connectionStatus.id = 'connection-status';
+                    document.body.appendChild(this.connectionStatus);
+                }
+                // Initialize custom message box
+                this.messageBox = document.getElementById('custom-message-box');
+                if (!this.messageBox) {
+                    const messageBox = document.createElement('div');
+                    messageBox.id = 'custom-message-box';
+                    messageBox.innerHTML = `
+                        <p id="custom-message-content"></p>
+                        <button id="custom-message-ok-btn">OK</button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    this.messageBox = messageBox;
+                    this.messageBox.querySelector('#custom-message-ok-btn').addEventListener('click', () => {
+                        this.messageBox.style.display = 'none';
+                    });
+                }
+                // New Project button
+                this.newProjectBtn = document.getElementById('new-project-btn');
+            }
+            // Displays a custom message box instead of alert()
+            showMessage(message, isConfirm = false, onConfirm = null) {
+                if (this.messageBox) {
+                    this.messageBox.querySelector('#custom-message-content').textContent = message;
+                    const okBtn = this.messageBox.querySelector('#custom-message-ok-btn');
+                    okBtn.textContent = isConfirm ? 'Yes' : 'OK';
+                    // Remove previous event listeners to prevent multiple calls
+                    const newOkBtn = okBtn.cloneNode(true);
+                    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+                    this.messageBox.querySelector('#custom-message-ok-btn').addEventListener('click', () => {
+                        this.messageBox.style.display = 'none';
+                        if (isConfirm && onConfirm) {
+                            onConfirm();
+                        }
+                    });
+                    // Add a "No" button for confirmation
+                    if (isConfirm) {
+                        const noBtn = document.createElement('button');
+                        noBtn.textContent = 'No';
+                        noBtn.style.cssText = `
+                            background-color: var(--button-bg-secondary);
+                            color: var(--button-text-secondary);
+                            padding: 10px 25px;
+                            border: 1px solid var(--border-color);
+                            border-radius: var(--border-radius-md);
+                            cursor: pointer;
+                            font-size: 16px;
+                            font-weight: 600;
+                            margin-left: 10px;
+                            transition: background-color 0.2s;
+                        `;
+                        noBtn.addEventListener('click', () => {
+                            this.messageBox.style.display = 'none';
+                        });
+                        // Ensure "No" button is added only once and after "Yes" button
+                        const existingNoBtn = this.messageBox.querySelector('button:last-of-type:not(#custom-message-ok-btn)');
+                        if (existingNoBtn) {
+                            existingNoBtn.remove();
+                        }
+                        this.messageBox.querySelector('#custom-message-content').insertAdjacentElement('afterend', noBtn);
+                    } else {
+                        // Remove "No" button if not a confirmation
+                        const existingNoBtn = this.messageBox.querySelector('button:last-of-type:not(#custom-message-ok-btn)');
+                        if (existingNoBtn) {
+                            existingNoBtn.remove();
+                        }
+                    }
+                    this.messageBox.style.display = 'flex';
+                } else {
+                    console.warn("Custom message box not initialized. Falling back to console log:", message);
+                    if (isConfirm && window.confirm(message) && onConfirm) {
+                        onConfirm();
+                    }
+                }
+            }
+            // Adds a chat message to the history
+            addChatMessage(content, sender) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('chat-message', sender);
+                const avatarElement = document.createElement('div');
+                avatarElement.classList.add('chat-avatar', sender);
+                avatarElement.textContent = sender === 'user' ? 'You' : 'Akino';
+                const contentElement = document.createElement('div');
+                contentElement.classList.add('chat-content');
+                // Use marked.parse for markdown rendering
+                contentElement.innerHTML = marked.parse(content);
+                messageElement.appendChild(avatarElement);
+                messageElement.appendChild(contentElement);
+                this.chatHistoryContainer.appendChild(messageElement);
+                // Add copy buttons to code blocks within the new message
+                this.addCopyButtonsToCodeBlocks(messageElement);
+                // Scroll to bottom
+                this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
+            }
+            // Adds copy buttons to code blocks within a given element
+            addCopyButtonsToCodeBlocks(element) {
+                element.querySelectorAll('pre > code').forEach(codeBlock => {
+                    const pre = codeBlock.parentElement;
+                    const button = document.createElement('button');
+                    button.className = 'copy-code-btn';
+                    button.innerHTML = '<i class="far fa-copy"></i> Copy';
+                    button.title = 'Copy code to clipboard';
+                    button.onclick = () => {
+                        this.copyToClipboard(codeBlock.textContent);
+                        button.textContent = 'Copied!';
+                        setTimeout(() => {
+                            button.innerHTML = '<i class="far fa-copy"></i> Copy';
+                        }, 2000);
+                    };
+                    pre.appendChild(button);
+                });
+            }
+            // Setup Marked.js to work with Prism.js for syntax highlighting
+            setupMarkdownRenderer() {
+                const renderer = new marked.Renderer();
+                // Override code block rendering to include Prism.js highlighting
+                renderer.code = (code, language) => {
+                    const lang = language || 'plaintext';
+                    const highlightedCode = Prism.highlight(code, Prism.languages[lang] || Prism.languages.plaintext, lang);
+                    return `<pre class="line-numbers"><code class="language-${lang}">${highlightedCode}</code></pre>`;
+                };
+                marked.setOptions({
+                    renderer: renderer,
+                    gfm: true, // GitHub Flavored Markdown
+                    breaks: true, // Add <br> on single new lines
+                    pedantic: false,
+                    sanitize: false, // Be careful with user-generated content without sanitization
+                    smartLists: true,
+                    smartypants: false,
+                    xhtml: false
+                });
+            }
+            clearAllData() {
+                this.clearChatHistory();
+                this.clearAgentOutputs();
+                this.projectFiles = {
+                    'welcome': this.projectFiles['welcome'] // Keep welcome file
+                };
+                this.renderFileTree();
+                this.showFileContent('welcome'); // Show welcome content in file viewer
+                this.currentProjectNameElement.querySelector('span').textContent = 'Current Project'; // Reset project name
+                this.addChatMessage('Welcome! How can I help you plan your project today?', 'ai'); // Re-add initial AI message
+                this.addLogMessage('All project data cleared. Starting a new project.', 'info');
+            }
+            clearChatHistory() {
+                this.chatHistoryContainer.innerHTML = '';
+                this.welcomeView.classList.remove('hidden');
+                this.chatPanel.classList.add('hidden');
+                this.agentOutputPanel.classList.add('hidden');
+                this.fileViewerPanel.classList.add('hidden');
+                this.contentArea.classList.remove('split-active'); // Use contentArea for split-active
+                this.setTypingIndicator(false); // Hide typing indicator
+            }
+            clearAgentOutputs() {
+                this.pmAgentOutput.textContent = '';
+                this.devAgentOutput.textContent = '';
+                this.qaAgentOutput.textContent = '';
+            }
+            clearProjectFiles() {
+                const welcomeContent = this.projectFiles['welcome'];
+                this.projectFiles = {
+                    'welcome': welcomeContent
+                };
+                this.renderFileTree();
+                this.showFileContent('welcome');
+            }
+            bindEvents() {
+                this.sendMessageBtn.addEventListener('click', () => this.sendMessage());
+                this.requirementsInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault(); // Prevent newline
+                        this.sendMessage();
+                    }
+                });
+                this.closeFileViewerBtn.addEventListener('click', () => {
+                    this.fileViewerPanel.classList.add('hidden');
+                    this.contentArea.classList.remove('split-active'); // Deactivate split view on contentArea
+                    // Restore the previously active agent/chat view
+                    this.showActiveAgentPanel(this.activeAgentTab);
+                });
+                // Download file feature
+                this.downloadFileBtn.addEventListener('click', () => {
+                    if (!this.activeFile || this.activeFile === 'welcome') return;
+                    const fileData = this.projectFiles[this.activeFile];
+                    if (fileData && fileData.content) {
+                        this.downloadTextFile(fileData.content, fileData.name || this.activeFile);
+                    } else {
+                        this.addLogMessage('File content not available for download.', 'warning');
+                    }
+                });
+                // Copy file content to clipboard
+                this.copyFileBtn.addEventListener('click', () => {
+                    if (!this.activeFile || this.activeFile === 'welcome') return;
+                    const fileData = this.projectFiles[this.activeFile];
+                    if (fileData && fileData.content) {
+                        this.copyToClipboard(fileData.content);
+                        this.showMessage('Content copied to clipboard!');
+                    } else {
+                        this.addLogMessage('File content not available for copy.', 'warning');
+                    }
+                });
+                this.agentTabs.forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('disabled')) return;
+                        this.agentTabs.forEach(t => t.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.activeAgentTab = e.target.dataset.agent;
+                        this.showActiveAgentPanel(this.activeAgentTab);
+                    });
+                });
+                this.requirementsInput.addEventListener('input', (e) => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                });
+                // New Project / Clear Chat button
+                this.newProjectBtn.addEventListener('click', () => {
+                    this.showMessage('Starting a new project will clear all current chat and generated files. Are you sure?', true, () => {
+                        this.clearAllData();
+                    });
+                });
+                // Project Renaming
+                this.currentProjectNameElement.addEventListener('dblclick', () => this.editProjectName());
+                // Context menu for files
+                this.fileTree.addEventListener('contextmenu', (e) => {
+                    e.preventDefault(); // Prevent default browser context menu
+                    const fileItem = e.target.closest('.file-item');
+                    if (fileItem && fileItem.dataset.filePath) {
+                        this.contextMenuTargetFile = fileItem.dataset.filePath;
+                        this.showContextMenu(e.clientX, e.clientY);
+                    }
+                });
+                // Hide context menu when clicking anywhere else
+                document.addEventListener('click', () => {
+                    this.contextMenu.classList.add('hidden');
+                });
+                this.contextMenu.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent click on menu from closing it immediately
+                });
+                // Context menu actions
+                this.contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const action = e.currentTarget.dataset.action;
+                        if (this.contextMenuTargetFile) {
+                            switch (action) {
+                                case 'open':
+                                    this.showFileContent(this.contextMenuTargetFile);
+                                    break;
+                                case 'download':
+                                    const fileData = this.projectFiles[this.contextMenuTargetFile];
+                                    if (fileData && fileData.content) {
+                                        this.downloadTextFile(fileData.content, fileData.name || this.contextMenuTargetFile);
+                                    } else {
+                                        this.addLogMessage('File content not available for download.', 'warning');
+                                    }
+                                    break;
+                                case 'copy-path':
+                                    this.copyToClipboard(this.contextMenuTargetFile);
+                                    this.showMessage('File path copied!');
+                                    break;
+                                case 'delete':
+                                    this.showMessage(`Are you sure you want to delete ${this.contextMenuTargetFile}? This action cannot be undone.`, true, () => {
+                                        this.deleteFile(this.contextMenuTargetFile);
+                                    });
+                                    break;
+                            }
+                        }
+                        this.contextMenu.classList.add('hidden');
+                    });
+                });
+            }
+            showContextMenu(x, y) {
+                this.contextMenu.style.left = `${x}px`;
+                this.contextMenu.style.top = `${y}px`;
+                this.contextMenu.classList.remove('hidden');
+            }
+            editProjectName() {
+                const currentNameSpan = this.currentProjectNameElement.querySelector('span');
+                const currentName = currentNameSpan.textContent;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentName;
+                input.className = 'project-name-input';
+                // Replace the span with the input
+                this.currentProjectNameElement.replaceChild(input, currentNameSpan);
+                input.focus();
+                const saveName = () => {
+                    const newName = input.value.trim();
+                    if (newName) {
+                        currentNameSpan.textContent = newName;
+                    } else {
+                        currentNameSpan.textContent = 'Current Project'; // Revert if empty
+                    }
+                    this.currentProjectNameElement.replaceChild(currentNameSpan, input);
+                    this.addLogMessage(`Project name changed to: ${currentNameSpan.textContent}`, 'info');
+                };
+                input.addEventListener('blur', saveName); // Save on blur
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        input.blur(); // Trigger blur to save
+                    }
+                });
+            }
+            deleteFile(filePath) {
+                // Frontend deletion
+                delete this.projectFiles[filePath];
+                this.renderFileTree();
+                if (this.activeFile === filePath) {
+                    this.showFileContent('welcome'); // Go back to welcome if deleted file was open
+                }
+                this.addLogMessage(`File deleted: ${filePath}`, 'info');
+                // TODO: Implement backend API call for actual file deletion on the server
+                // Example: fetch('/api/delete_file', { method: 'POST', body: JSON.stringify({ file_path: filePath }) });
+            }
+            /**
+             * Shows the currently active agent panel (chat, pm, dev, qa)
+             * and hides others.
+             */
+            showActiveAgentPanel(agentType) {
+                this.welcomeView.classList.add('hidden'); // Always hide welcome when an agent/chat panel is active
+                // Hide all main content panels first
+                this.chatPanel.classList.add('hidden');
+                this.agentOutputPanel.classList.add('hidden');
+                // Hide all individual agent output contents
+                document.querySelectorAll('.agent-output-content').forEach(panel => {
+                    panel.classList.add('hidden');
+                });
+                // Show the correct panel based on agentType
+                if (agentType === 'chat') {
+                    this.chatPanel.classList.remove('hidden');
+                    this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
+                } else {
+                    this.agentOutputPanel.classList.remove('hidden');
+                    const targetPanel = document.getElementById(`${agentType}-agent-output`);
+                    if (targetPanel) {
+                        targetPanel.classList.remove('hidden');
+                        targetPanel.scrollTop = targetPanel.scrollHeight;
+                    }
+                }
+                // If file viewer is open, keep split view active on contentArea, otherwise turn it off
+                if (this.fileViewerPanel.classList.contains('hidden')) {
+                    this.contentArea.classList.remove('split-active');
+                } else {
+                    this.contentArea.classList.add('split-active');
+                }
+            }
+            /**
+             * Triggers a download of the given text content as a file.
+             */
+            downloadTextFile(content, filename) {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            }
+            /**
+             * Copies text content to the clipboard.
+             */
+            copyToClipboard(text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed'; // Avoid scrolling to bottom
+                textarea.style.left = '-9999px'; // Hide off-screen
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                } catch (err) {
+                    console.error('Failed to copy text:', err);
+                    this.addLogMessage('Failed to copy text to clipboard.', 'error');
+                }
+                document.body.removeChild(textarea);
+            }
+            initializeMockFiles() {
+                const welcomeContent = {
+                    name: 'Welcome',
+                    content: 'Welcome to AI Chatbot & Code Viewer\n\nYour generated code files will appear in the "Generated Files" section.\nClick on files in the left panel to view their contents.',
+                    type: 'text',
+                    path: 'welcome'
+                };
+                this.projectFiles = {
+                    'welcome': this.projectFiles['welcome'] || welcomeContent
+                };
+                if (this.fileTree) {
+                    this.renderFileTree();
+                } else {
+                    console.warn('Some UI elements not initialized yet. Skipping initial render.');
+                }
+                // Add initial AI welcome message to chat and activate chat tab
+                this.addChatMessage('Welcome! How can I help you plan your project today?', 'ai');
+                this.showActiveAgentPanel('chat'); // Ensure chat is visible from start
+                this.setAgentStatus('chat', 'idle'); // Set initial status for chat tab
+                this.setAgentStatus('pm', 'idle');
+                this.setAgentStatus('dev', 'idle');
+                this.setAgentStatus('qa', 'idle');
+                this.setAgentStatus('ops', 'idle');
+            }
+            async fetchInitialFiles() {
+                try {
+                    const response = await fetch('/api/files');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    if (Array.isArray(data)) {
+                        this.addLogMessage('Fetched existing project files.', 'info');
+                        const processEntries = (entries) => {
+                            for (const entry of entries) {
+                                if (entry.type === 'file') {
+                                    this.projectFiles[entry.path] = {
+                                        name: entry.name,
+                                        path: entry.path,
+                                        content: `// Content for ${entry.name} will be loaded on click.`,
+                                        type: 'code'
+                                    };
+                                } else if (entry.type === 'directory' && entry.children) {
+                                    processEntries(entry.children);
+                                }
+                            }
+                        };
+                        processEntries(data);
+                        this.renderFileTree();
+                    }
+                } catch (error) {
+                    console.error('Error fetching initial file list:', error);
+                    this.addLogMessage('Could not load existing files from the server.', 'error');
+                }
+            }
+            async fetchFileContent(filePath) {
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.addLogMessage('Cannot fetch file content. WebSocket is not connected.', 'error');
+                    return;
+                }
+                if (filePath === 'welcome') {
+                    // If welcome file is clicked, close file viewer and return to chat/welcome
+                    this.closeFileViewerBtn.click();
+                    return;
+                }
+                if (this.fileContentDisplay) {
+                    this.fileContentDisplay.innerHTML = `<div class="code-placeholder">Loading ${filePath}...</div>`;
+                }
+                const payload = {
+                    type: 'request_file_content',
+                    file_path: filePath
+                };
+                this.ws.send(JSON.stringify(payload));
+            }
+            connectWebSocket() {
+                if (this.isConnecting) return;
+                this.isConnecting = true;
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                console.log("Attempting WebSocket connection to:", wsUrl);
+                try {
+                    this.ws = new WebSocket(wsUrl);
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.reconnectAttempts = 0;
+                        this.isConnecting = false;
+                        this.updateConnectionStatus(true);
+                        this.addLogMessage('Connected to planning server', 'info');
+                        this.fetchInitialFiles();
+                    };
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (error) {
+                            console.error('Failed to parse WebSocket message:', error);
+                            this.addLogMessage('Failed to parse WebSocket message: ' + error.message, 'error');
+                        }
+                    };
+                    this.ws.onclose = (event) => {
+                        console.log('WebSocket disconnected', event.code, event.reason);
+                        this.isConnecting = false;
+                        this.updateConnectionStatus(false);
+                        this.addLogMessage(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason || 'N/A'}`, 'warning');
+                        if (event.code !== 1000) { // 1000 is normal closure
+                            this.attemptReconnect();
+                        }
+                    };
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.isConnecting = false;
+                        this.updateConnectionStatus(false);
+                        this.addLogMessage('WebSocket error occurred. Check console for details.', 'error');
+                    };
+                } catch (error) {
+                    console.error('Failed to connect WebSocket:', error);
+                    this.isConnecting = false;
+                    this.updateConnectionStatus(false);
+                    this.addLogMessage('Failed to initiate WebSocket connection: ' + error.message, 'error');
+                    this.attemptReconnect();
+                }
+            }
+            attemptReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts && !this.isConnecting) {
+                    this.reconnectAttempts++;
+                    this.addLogMessage(`Connection lost. Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'warning');
+                    setTimeout(() => {
+                        this.connectWebSocket();
+                    }, this.reconnectInterval);
+                } else if (!this.isConnecting) {
+                    this.addLogMessage('Failed to connect after multiple attempts. Please refresh.', 'error');
+                }
+            }
+            updateConnectionStatus(connected) {
+                if (!this.connectionStatus) return;
+                if (connected) {
+                    this.connectionStatus.textContent = '🟢 Connected';
+                    this.connectionStatus.className = 'connection-status connected';
+                } else {
+                    this.connectionStatus.textContent = '🔴 Disconnected';
+                    this.connectionStatus.className = 'connection-status disconnected';
+                }
+            }
+            renderFileTree() {
+                if (!this.fileTree) return;
+                const buildHierarchy = (files) => {
+                    const root = { children: [] };
+                    const sortedPaths = Object.keys(files).sort();
+                    for (const path of sortedPaths) {
+                        if (path === 'welcome') continue;
+                        let current = root;
+                        const parts = path.split('/');
+                        let builtPath = '';
+                        for (let i = 0; i < parts.length; i++) {
+                            const part = parts[i];
+                            const isFile = i === parts.length - 1;
+                            builtPath = builtPath ? `${builtPath}/${part}` : part;
+                            let node = current.children.find(child => child.name === part);
+                            if (!node) {
+                                node = {
+                                    name: part,
+                                    type: isFile ? 'file' : 'directory',
+                                    path: builtPath,
+                                    children: isFile ? undefined : []
+                                };
+                                current.children.push(node);
+                            }
+                            current = node;
+                        }
+                    }
+                    return root.children;
+                };
+                this.fileTree.innerHTML = '';
+                if (this.projectFiles['welcome']) {
+                    this.fileTree.appendChild(this.createNodeElement(this.projectFiles['welcome']));
+                }
+                const fileStructure = buildHierarchy(this.projectFiles);
+                fileStructure.forEach(node => {
+                    this.fileTree.appendChild(this.createNodeElement(node));
+                });
+                if (this.fileTree.innerHTML === '') {
+                    this.fileTree.innerHTML = '<div class="file-item">No files generated yet.</div>';
+                }
+            }
+            createNodeElement(node) {
+                const container = document.createElement('div');
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.dataset.filePath = node.path; // Store file path for context menu
+                if (node.type === 'directory') {
+                    container.classList.add('directory');
+                    item.innerHTML = `<span class="icon-folder"><i class="fas fa-folder"></i></span> <span>${node.name}</span>`;
+                    item.onclick = (e) => {
+                        e.currentTarget.parentElement.classList.toggle('collapsed');
+                    };
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'children-container';
+                    if (node.children) {
+                        node.children.forEach(child => {
+                            childrenContainer.appendChild(this.createNodeElement(child));
+                        });
+                    }
+                    container.appendChild(item);
+                    container.appendChild(childrenContainer);
+                } else {
+                    // Determine icon based on file extension
+                    const fileExtension = node.name.split('.').pop().toLowerCase();
+                    let iconClass = 'fas fa-file'; // Default file icon
+                    switch (fileExtension) {
+                        case 'js':
+                        case 'jsx':
+                            iconClass = 'fab fa-js'; // JavaScript icon
+                            break;
+                        case 'py':
+                            iconClass = 'fab fa-python'; // Python icon
+                            break;
+                        case 'json':
+                            iconClass = 'fas fa-file-code'; // Code file icon
+                            break;
+                        case 'html':
+                        case 'htm':
+                            iconClass = 'fab fa-html5'; // HTML icon
+                            break;
+                        case 'css':
+                            iconClass = 'fab fa-css3-alt'; // CSS icon
+                            break;
+                        case 'md':
+                            iconClass = 'fab fa-markdown'; // Markdown icon
+                            break;
+                        case 'txt':
+                            iconClass = 'fas fa-file-alt'; // Text file icon
+                            break;
+                        case 'png':
+                        case 'jpg':
+                        case 'jpeg':
+                        case 'gif':
+                        case 'svg':
+                            iconClass = 'fas fa-file-image'; // Image file icon
+                            break;
+                        // Add more cases for other languages/file types as needed
+                    }
+                    item.innerHTML = `<span class="icon-file"><i class="${iconClass}"></i></span> <span>${node.name}</span>`;
+                    item.onclick = () => this.showFileContent(node.path);
+                    container.appendChild(item);
+                }
+                return container;
+            }
+            async showFileContent(filePath) {
+                // Remove 'selected' class from previously active file item
+                const prevSelected = this.fileTree.querySelector('.file-item.selected');
+                if (prevSelected) {
+                    prevSelected.classList.remove('selected');
+                }
+                this.activeFile = filePath;
+                // Add 'selected' class to the current file item
+                const currentFileItem = this.fileTree.querySelector(`[onclick*="showFileContent('${filePath}')"]`);
+                if (currentFileItem) {
+                    currentFileItem.classList.add('selected');
+                }
+                this.welcomeView.classList.add('hidden');
+                // Ensure the correct agent panel is visible on the left side
+                this.showActiveAgentPanel(this.activeAgentTab); // This will hide the other main panels
+                this.fileViewerPanel.classList.remove('hidden'); // Show file viewer
+                this.contentArea.classList.add('split-active'); // Activate split view on contentArea
+                this.fileViewerFilename.textContent = filePath;
+                if (this.projectFiles[filePath] && this.projectFiles[filePath].content && !this.projectFiles[filePath].content.startsWith('// Content for')) {
+                    const fileContent = this.projectFiles[filePath].content;
+                    const fileExtension = filePath.split('.').pop();
+                    let languageClass = 'language-text';
+                    switch (fileExtension) {
+                        case 'js':
+                        case 'jsx':
+                            languageClass = 'language-javascript';
+                            break;
+                        case 'py':
+                            languageClass = 'language-python';
+                            break;
+                        case 'json':
+                            languageClass = 'language-json';
+                            break;
+                        case 'html':
+                        case 'htm':
+                            languageClass = 'language-html';
+                            break;
+                        case 'css':
+                            languageClass = 'language-css';
+                            break;
+                        case 'md':
+                            languageClass = 'language-markdown';
+                            break;
+                        // Add more cases as needed
+                    }
+                    this.fileContentDisplay.innerHTML = `<pre class="line-numbers"><code class="${languageClass}">${fileContent}</code></pre>`;
+                    Prism.highlightElement(this.fileContentDisplay.querySelector('code'));
+                } else {
+                    this.fileContentDisplay.innerHTML = '<div class="code-placeholder">Loading...</div>';
+                    this.ws.send(JSON.stringify({ type: 'request_file_content', file_path: filePath }));
+                }
+            }
+            handleMessage(data) {
+                console.log("Received WS message:", data);
+                try {
+                    switch (data.type) {
+                        case 'planning_started':
+                            this.addChatMessage(data.message, 'ai');
+                            this.showActiveAgentPanel('chat'); // Ensure chat is active
+                            this.setTypingIndicator(true); // Show typing indicator
+                            this.setAgentStatus('chat', 'running'); // Set chat agent status to running
+                            break;
+                        case 'agent_output':
+                            // Route agent_output to specific panel if agent_type is provided
+                            if (data.agent_type && this[`${data.agent_type}AgentOutput`]) {
+                                const outputPanel = this[`${data.agent_type}AgentOutput`];
+                                outputPanel.textContent += data.content;
+                                outputPanel.scrollTop = outputPanel.scrollHeight;
+                                if (this.activeAgentTab !== data.agent_type) {
+                                    this.addLogMessage(`${data.agent_type.toUpperCase()} Agent is active. Switch to ${data.agent_type.toUpperCase()} tab to see output.`, 'info');
+                                }
+                            } else {
+                                // Default to chat if no specific agent_type or panel found
+                                this.addChatMessage(data.content, 'ai');
+                            }
+                            break;
+                        case 'pm_agent_llm_streaming_chunk':
+                            this.pmAgentOutput.textContent += data.content;
+                            this.pmAgentOutput.scrollTop = this.pmAgentOutput.scrollHeight;
+                            this.setAgentStatus('pm', 'running');
+                            if (this.activeAgentTab !== 'pm') {
+                                this.addLogMessage('PM Agent is active. Switch to PM tab to see output.', 'info');
+                            }
+                            break;
+                        case 'dev_agent_llm_streaming_chunk':
+                            this.devAgentOutput.textContent += data.content;
+                            this.devAgentOutput.scrollTop = this.devAgentOutput.scrollHeight;
+                            this.setAgentStatus('dev', 'running');
+                            if (this.activeAgentTab !== 'dev') {
+                                this.addLogMessage('Dev Agent is active. Switch to Dev tab to see output.', 'info');
+                            }
+                            break;
+                        case 'qa_agent_llm_streaming_chunk':
+                            this.qaAgentOutput.textContent += data.content;
+                            this.qaAgentOutput.scrollTop = this.qaAgentOutput.scrollHeight;
+                            this.setAgentStatus('qa', 'running');
+                            if (this.activeAgentTab !== 'qa') {
+                                this.addLogMessage('QA Agent is active. Switch to QA tab to see output.', 'info');
+                            }
+                            break;
+                        case 'llm_response_complete':
+                            this.addLogMessage(`LLM response stream completed for ${data.agent_id || 'an agent'} task ${data.task_id || ''}.`, 'info');
+                            this.setTypingIndicator(false); // Hide typing indicator
+                            this.setAgentStatus(data.agent_id || 'chat', 'complete'); // Set specific agent status to complete
+                            break;
+                        case 'progress':
+                            this.addLogMessage(`Progress: ${data.message} (${data.progress}%)`, 'info');
+                            break;
+                        case 'planning_completed':
+                            this.addChatMessage('✅ Planning successfully completed!', 'ai');
+                            this.addLogMessage('✅ Planning successfully completed!', 'info');
+                            this.sendMessageBtn.disabled = false;
+                            this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+                            this.showActiveAgentPanel('chat'); // Return to chat after completion
+                            this.setTypingIndicator(false); // Hide typing indicator
+                            this.setAgentStatus('chat', 'complete'); // Set chat agent status to complete
+                            this.setAgentStatus('pm', 'idle'); // Reset other agents to idle
+                            this.setAgentStatus('dev', 'idle');
+                            this.setAgentStatus('qa', 'idle');
+                            break;
+                        case 'task_status_update':
+                            this.addLogMessage(`[${data.agent_id}] Task '${data.task_id}': ${data.status}`, 'info');
+                            // Can update specific agent status more granularly here if needed
+                            break;
+                        case 'file_generated':
+                            this.handleFileGenerated(data);
+                            this.renderFileTree();
+                            this.addLogMessage(`File generated: ${data.file_path}`, 'info');
+                            this.addChatMessage(`A new file has been generated: <code>${data.file_path}</code>. Click on it in the left panel to view.`, 'ai');
+                            break;
+                        case 'file_content_response':
+                            if (data.file_path && this.projectFiles[data.file_path]) {
+                                this.projectFiles[data.file_path].content = data.content;
+                                if (this.activeFile === data.file_path) {
+                                    this.showFileContent(data.file_path); // Re-render with actual content
+                                }
+                            }
+                            break;
+                        case 'error':
+                            this.handleError(data);
+                            this.sendMessageBtn.disabled = false;
+                            this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+                            this.showActiveAgentPanel('chat'); // Return to chat on error
+                            this.setTypingIndicator(false); // Hide typing indicator
+                            this.setAgentStatus(data.agent_id || 'chat', 'error'); // Set specific agent status to error
+                            break;
+                        default:
+                            console.log(`Unhandled message type: ${data.type}`);
+                            this.addLogMessage(`Unhandled message type: ${data.type}`, 'warning');
+                    }
+                } catch (error) {
+                    console.error('Error handling WebSocket message:', error);
+                    this.addLogMessage('Error processing server response: ' + error.message, 'error');
+                    this.sendMessageBtn.disabled = false;
+                    this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+                    this.showActiveAgentPanel('chat'); // Return to chat on error
+                    this.setTypingIndicator(false); // Hide typing indicator
+                    this.setAgentStatus('chat', 'error'); // Set chat status to error
+                }
+            }
+            handleFileGenerated(data) {
+                if (data.file_path) {
+                    this.projectFiles[data.file_path] = {
+                        name: data.file_name || data.file_path.split('/').pop(),
+                        path: data.file_path,
+                        content: data.content || `// Content for ${data.file_name} will be loaded on click.`,
+                        type: 'file'
+                    };
+                }
+            }
+            handleError(data) {
+                const errorMessage = data.message || 'An unknown error occurred.';
+                this.addLogMessage(`Error: ${errorMessage}`, 'error');
+                this.showMessage(`An error occurred: ${errorMessage}`);
+            }
+            handleTaskStatusUpdate(data) {
+                this.addLogMessage(`[${data.agent_id}] Task '${data.task_id}': ${data.status}`, 'info');
+            }
+            // addLogMessage will still log to console for debugging, but not to UI
+            addLogMessage(message, type = 'info') {
+                console.log(`[LOG - ${type.toUpperCase()}] ${message}`);
+            }
+            setTypingIndicator(show) {
+                if (this.typingIndicator) {
+                    this.typingIndicator.classList.toggle('hidden', !show);
+                    if (show) {
+                        this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
+                    }
+                }
+            }
+            setAgentStatus(agentId, status) {
+                const dot = this.agentStatusDots[agentId];
+                if (dot) {
+                    dot.classList.remove('idle', 'running', 'complete', 'error');
+                    dot.classList.add(status);
+                }
+            }
+            // Custom showMessage to allow for confirmation dialogs
+            showMessage(message, isConfirm = false, onConfirm = null) {
+                if (this.messageBox) {
+                    this.messageBox.querySelector('#custom-message-content').textContent = message;
+                    const okBtn = this.messageBox.querySelector('#custom-message-ok-btn');
+                    okBtn.textContent = isConfirm ? 'Yes' : 'OK';
+                    // Remove previous event listeners to prevent multiple calls
+                    const newOkBtn = okBtn.cloneNode(true);
+                    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+                    this.messageBox.querySelector('#custom-message-ok-btn').addEventListener('click', () => {
+                        this.messageBox.style.display = 'none';
+                        if (isConfirm && onConfirm) {
+                            onConfirm();
+                        }
+                    });
+                    // Add a "No" button for confirmation
+                    if (isConfirm) {
+                        const noBtn = document.createElement('button');
+                        noBtn.textContent = 'No';
+                        noBtn.style.cssText = `
+                            background-color: var(--button-bg-secondary);
+                            color: var(--button-text-secondary);
+                            padding: 10px 25px;
+                            border: 1px solid var(--border-color);
+                            border-radius: var(--border-radius-md);
+                            cursor: pointer;
+                            font-size: 16px;
+                            font-weight: 600;
+                            margin-left: 10px;
+                            transition: background-color 0.2s;
+                        `;
+                        noBtn.addEventListener('click', () => {
+                            this.messageBox.style.display = 'none';
+                        });
+                        // Ensure "No" button is added only once and after "Yes" button
+                        const existingNoBtn = this.messageBox.querySelector('button:last-of-type:not(#custom-message-ok-btn)');
+                        if (existingNoBtn) {
+                            existingNoBtn.remove();
+                        }
+                        this.messageBox.querySelector('#custom-message-content').insertAdjacentElement('afterend', noBtn);
+                    } else {
+                        // Remove "No" button if not a confirmation
+                        const existingNoBtn = this.messageBox.querySelector('button:last-of-type:not(#custom-message-ok-btn)');
+                        if (existingNoBtn) {
+                            existingNoBtn.remove();
+                        }
+                    }
+                    this.messageBox.style.display = 'flex';
+                } else {
+                    console.warn("Custom message box not initialized. Falling back to console log:", message);
+                    if (isConfirm && window.confirm(message) && onConfirm) {
+                        onConfirm();
+                    }
+                }
+            }
+            sendMessage() {
+                this.addLogMessage('Send button clicked.', 'info');
+                if (!this.ws) {
+                    this.addLogMessage('WebSocket object is null.', 'error');
+                    this.showMessage('WebSocket is not initialized. Please refresh the page.');
+                    return;
+                }
+                if (this.ws.readyState !== WebSocket.OPEN) {
+                    this.addLogMessage('WebSocket is not open. State: ' + this.ws.readyState, 'error');
+                    this.showMessage('Failed to send message. Ensure you are connected.');
+                    return;
+                }
+                const requirements = this.requirementsInput.value.trim();
+                if (!requirements) {
+                    this.addLogMessage('Message cannot be empty.', 'error');
+                    this.showMessage('Please enter your project requirements or a question.');
+                    return;
+                }
+                this.addChatMessage(requirements, 'user'); // Add user message to chat history
+                this.requirementsInput.value = ''; // Clear input
+                this.requirementsInput.style.height = 'auto'; // Reset input height
+                this.addLogMessage('Requirements entered: ' + requirements, 'info');
+                // Always switch to chat tab when sending a new message
+                this.showActiveAgentPanel('chat');
+                this.sendMessageBtn.disabled = true;
+                this.sendMessageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                this.setTypingIndicator(true); // Show typing indicator
+                this.setAgentStatus('chat', 'running'); // Set chat agent status to running
+                const payload = {
+                    type: 'start_planning', // Assuming 'start_planning' is the generic message type for interaction
+                    requirements: requirements
+                };
+                try {
+                    this.ws.send(JSON.stringify(payload));
+                    this.addLogMessage('Message sent to server.', 'info');
+                } catch (err) {
+                    this.addLogMessage('Failed to send message: ' + err, 'error');
+                    this.showMessage('Failed to send message. See logs for details.');
+                    this.sendMessageBtn.disabled = false;
+                    this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+                    this.setTypingIndicator(false); // Hide typing indicator on error
+                    this.setAgentStatus('chat', 'error'); // Set chat agent status to error
+                }
+            }
+        }
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            window.dashboardInstance = new PlanningDashboard();
+        });
+    </script>
+</body>
+</html>

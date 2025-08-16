@@ -1,0 +1,394 @@
+{
+  "id": "04794216-484e-48fc-817d-77d8b45f3114",
+  "title": "Project Plan: 3D Arcade Racing Game (Codename: Velocity)",
+  "description": "This plan outlines the end-to-end development of a 3D arcade-style racing game for PC. The project scope includes one playable vehicle, one race track, AI opponents, and core gameplay mechanics such as lap timing and position tracking. The objective is to deliver a polished, playable single-race experience, establishing a foundational framework for future expansion.",
+  "tasks": [
+    {
+      "id": "task_001",
+      "title": "Finalize Game Design Document (GDD)",
+      "description": "Flesh out the high-level 'car game' concept into a detailed GDD. This document will be the single source of truth for the project. Acceptance Criteria: - Core gameplay loop is defined (race start, laps, finish). - Vehicle handling characteristics are specified (arcade vs. simulation). - AI behavior is outlined. - UI/HUD elements are listed. - Art style and audio direction are established.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [],
+      "estimated_hours": 24.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:04:20.212472",
+      "metadata": {}
+    },
+    {
+      "id": "task_002",
+      "title": "Technology Stack Selection & Feasibility",
+      "description": "Choose and validate the primary technology stack for the game. Acceptance Criteria: - Game engine (e.g., Unity, Unreal Engine) is selected and justified. - Version control system (e.g., Git) is chosen. - A prototype confirms the engine can handle the core physics and rendering requirements.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:05:02.976462",
+      "metadata": {}
+    },
+    {
+      "id": "task_003",
+      "title": "Core Architecture Design",
+      "description": "Design the high-level software architecture. This includes class structures, manager systems, and data flow. Acceptance Criteria: - A diagram shows the relationship between major systems (Input, Physics, AI, UI, Game State). - Design patterns for key components are chosen (e.g., State Machine for game flow, Singleton for managers). - Asset pipeline and management strategy is defined.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_002"
+      ],
+      "estimated_hours": 32.0,
+      "complexity": "complex",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:05:56.264772",
+      "metadata": {}
+    },
+    {
+      "id": "task_004",
+      "title": "Risk Assessment and Mitigation Plan",
+      "description": "Identify potential risks in the project (technical, resource, schedule) and create a mitigation plan. Acceptance Criteria: - A document lists at least 5 key risks (e.g., physics instability, performance bottlenecks). - Each risk has a corresponding mitigation strategy. - The plan is reviewed and approved by project stakeholders.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 8.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:07:25.580051",
+      "metadata": {}
+    },
+    {
+      "id": "task_005",
+      "title": "UI/UX Wireframing and Design",
+      "description": "Create wireframes and mockups for all user interface screens. Acceptance Criteria: - Wireframes for Main Menu, In-Game HUD, Pause Menu, and Post-Race Screen are created. - User flow between screens is clear and intuitive. - Final visual design mockups are approved.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_001"
+      ],
+      "estimated_hours": 24.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:08:09.638988",
+      "metadata": {}
+    },
+    {
+      "id": "task_006",
+      "title": "Setup Version Control & Project Scaffolding",
+      "description": "Initialize the version control repository and create the basic project structure within the chosen game engine. Acceptance Criteria: - Git repository is created with a clear branching strategy (e.g., GitFlow). - Base folder structure (Scripts, Assets, Scenes) is established in the engine. - Initial project is committed and accessible to the team.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_002"
+      ],
+      "estimated_hours": 4.0,
+      "complexity": "simple",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:09:08.657490",
+      "metadata": {}
+    },
+    {
+      "id": "task_007",
+      "title": "Develop Player Input System",
+      "description": "Implement a system to handle player input from keyboard and/or gamepad. Acceptance Criteria: - System correctly reads steering, acceleration, and braking inputs. - Input can be remapped (stub for future). - System is decoupled from game logic to allow for easy changes (e.g., AI takeover).",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_003",
+        "task_006"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:09:58.291668",
+      "metadata": {}
+    },
+    {
+      "id": "task_008",
+      "title": "Implement Core Vehicle Physics",
+      "description": "Develop the physics model for the player vehicle. This is a critical task for game feel. Acceptance Criteria: - Vehicle accelerates and brakes based on input. - Vehicle steering feels responsive and aligns with the GDD's arcade style. - Basic collision detection with the environment is functional. - Vehicle does not fall through the ground.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_007"
+      ],
+      "estimated_hours": 40.0,
+      "complexity": "expert",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:11:29.296912",
+      "metadata": {}
+    },
+    {
+      "id": "task_009",
+      "title": "Implement Game State Manager",
+      "description": "Create a state machine to manage the overall flow of the game. Acceptance Criteria: - States for MainMenu, Loading, Racing, Paused, and RaceOver are implemented. - Transitions between states are handled correctly. - Game logic is correctly activated/deactivated based on the current state.",
+      "priority": 10,
+      "status": "failed",
+      "dependencies": [
+        "task_003",
+        "task_006"
+      ],
+      "estimated_hours": 24.0,
+      "complexity": "complex",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:12:55.188056",
+      "metadata": {}
+    },
+    {
+      "id": "task_010",
+      "title": "Implement Track & Waypoint System",
+      "description": "Integrate the 3D model for the race track and implement a waypoint system for AI navigation and lap tracking. Acceptance Criteria: - Track model is imported and has proper collision meshes. - A series of waypoints defining the racing line is created. - System can determine a car's progress along the track.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_006"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:14:32.551849",
+      "metadata": {}
+    },
+    {
+      "id": "task_011",
+      "title": "Develop Basic AI Opponent Behavior",
+      "description": "Create the logic for AI-controlled opponents. Acceptance Criteria: - AI cars can successfully navigate the track by following waypoints. - AI cars have basic acceleration and braking logic. - AI cars can avoid simple static obstacles (the track walls).",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_008",
+        "task_010"
+      ],
+      "estimated_hours": 32.0,
+      "complexity": "complex",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:16:07.173850",
+      "metadata": {}
+    },
+    {
+      "id": "task_012",
+      "title": "Implement Race Logic Manager",
+      "description": "Develop the system that manages race rules. Acceptance Criteria: - Lap counting is accurate for all cars. - Player and AI positions (1st, 2nd, etc.) are tracked and updated in real-time. - Race start countdown and finish line detection are functional.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_010"
+      ],
+      "estimated_hours": 20.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:17:47.725085",
+      "metadata": {}
+    },
+    {
+      "id": "task_013",
+      "title": "Develop In-Game HUD",
+      "description": "Implement the Heads-Up Display based on the UI/UX designs. Acceptance Criteria: - HUD displays current speed, lap number, and race position. - UI elements update correctly in real-time based on data from the Race Logic Manager. - HUD is non-intrusive and performs well.",
+      "priority": 5,
+      "status": "failed",
+      "dependencies": [
+        "task_005",
+        "task_012"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:19:25.929929",
+      "metadata": {}
+    },
+    {
+      "id": "task_014",
+      "title": "Implement Main Menu and Pause Screens",
+      "description": "Develop the front-end menus for game interaction. Acceptance Criteria: - Main Menu has functional 'Start Race', 'Options' (stub), and 'Quit' buttons. - Pause Menu can be triggered during a race and has 'Resume' and 'Quit to Menu' options. - Menus correctly transition to and from the game state.",
+      "priority": 5,
+      "status": "failed",
+      "dependencies": [
+        "task_005",
+        "task_009"
+      ],
+      "estimated_hours": 12.0,
+      "complexity": "simple",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:20:40.375846",
+      "metadata": {}
+    },
+    {
+      "id": "task_015",
+      "title": "Integrate Audio System",
+      "description": "Implement sound effects and music. Acceptance Criteria: - Engine sounds change pitch with acceleration. - Collision and tire screech sound effects are triggered by physics events. - Background music plays during the race and in the menu.",
+      "priority": 5,
+      "status": "failed",
+      "dependencies": [
+        "task_008",
+        "task_009"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:21:45.968839",
+      "metadata": {}
+    },
+    {
+      "id": "task_016",
+      "title": "Implement Unit Tests for Core Logic",
+      "description": "Write unit tests for critical, non-MonoBehaviour systems. Acceptance Criteria: - Race Logic Manager's position calculation is covered by tests. - Input handling logic is tested. - Test coverage for testable logic is above 70%.",
+      "priority": 5,
+      "status": "failed",
+      "dependencies": [
+        "task_012"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "qa_agent",
+      "created_at": "2025-08-16T11:23:28.512748",
+      "metadata": {}
+    },
+    {
+      "id": "task_017",
+      "title": "Integration Testing: Player & Physics",
+      "description": "Perform formal testing to ensure the player controller and vehicle physics work together as expected. Acceptance Criteria: - A test plan is created and executed. - Vehicle handles predictably across the entire track. - No critical bugs (e.g., falling through world, unresponsive controls) are present.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_008",
+        "task_010"
+      ],
+      "estimated_hours": 24.0,
+      "complexity": "medium",
+      "agent_type": "qa_agent",
+      "created_at": "2025-08-16T11:23:28.514136",
+      "metadata": {}
+    },
+    {
+      "id": "task_018",
+      "title": "System Testing: Full Gameplay Loop",
+      "description": "Test the entire game from start to finish. Acceptance Criteria: - Player can start the game from the main menu, complete a 3-lap race against AI, and see a results screen. - All UI, audio, and gameplay systems function correctly together. - A comprehensive bug report is generated for any issues found.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_011",
+        "task_013",
+        "task_014",
+        "task_015"
+      ],
+      "estimated_hours": 32.0,
+      "complexity": "complex",
+      "agent_type": "qa_agent",
+      "created_at": "2025-08-16T11:23:28.515802",
+      "metadata": {}
+    },
+    {
+      "id": "task_019",
+      "title": "Performance Testing and Optimization",
+      "description": "Profile the game to identify and fix performance bottlenecks. Acceptance Criteria: - The game maintains a stable target framerate (e.g., 60 FPS) on the target hardware. - Memory usage is within acceptable limits. - A performance report is generated with before-and-after metrics for any optimizations made.",
+      "priority": 8,
+      "status": "failed",
+      "dependencies": [
+        "task_018"
+      ],
+      "estimated_hours": 24.0,
+      "complexity": "complex",
+      "agent_type": "qa_agent",
+      "created_at": "2025-08-16T11:23:28.517441",
+      "metadata": {}
+    },
+    {
+      "id": "task_020",
+      "title": "User Acceptance Testing (UAT)",
+      "description": "Gather feedback on gameplay feel and fun factor from a focus group. Acceptance Criteria: - A UAT session is conducted with target players. - Feedback is collected, categorized, and prioritized. - Critical feedback points are converted into new development tasks.",
+      "priority": 5,
+      "status": "failed",
+      "dependencies": [
+        "task_019"
+      ],
+      "estimated_hours": 16.0,
+      "complexity": "medium",
+      "agent_type": "qa_agent",
+      "created_at": "2025-08-16T11:23:28.519010",
+      "metadata": {}
+    },
+    {
+      "id": "task_021",
+      "title": "Setup CI/CD Pipeline for Automated Builds",
+      "description": "Create a continuous integration and deployment pipeline to automate the build process. Acceptance Criteria: - A build is automatically triggered on every commit to the main branch. - The pipeline runs all unit tests. - Successful builds are automatically uploaded to a distribution platform (e.g., Itch.io, Steamworks dev branch).",
+      "priority": 8,
+      "status": "completed",
+      "dependencies": [
+        "task_006"
+      ],
+      "estimated_hours": 32.0,
+      "complexity": "complex",
+      "agent_type": "ops_agent",
+      "created_at": "2025-08-16T11:23:28.520477",
+      "metadata": {}
+    },
+    {
+      "id": "task_022",
+      "title": "Configure Staging and Production Environments",
+      "description": "Set up distinct environments/configurations for testing and final release. Acceptance Criteria: - A 'staging' build configuration includes debug tools and verbose logging. - A 'production' build configuration is optimized for performance and has debugging disabled. - The CI/CD pipeline can generate builds for both environments.",
+      "priority": 5,
+      "status": "completed",
+      "dependencies": [
+        "task_021"
+      ],
+      "estimated_hours": 8.0,
+      "complexity": "medium",
+      "agent_type": "ops_agent",
+      "created_at": "2025-08-16T11:23:31.072079",
+      "metadata": {}
+    },
+    {
+      "id": "task_023",
+      "title": "Implement Monitoring and Crash Reporting",
+      "description": "Integrate a service to automatically report crashes and collect basic analytics. Acceptance Criteria: - An SDK (e.g., Sentry, Unity Analytics) is integrated. - Unhandled exceptions in production builds are automatically reported to the service. - A dashboard is set up to review crash reports.",
+      "priority": 5,
+      "status": "completed",
+      "dependencies": [
+        "task_022"
+      ],
+      "estimated_hours": 12.0,
+      "complexity": "medium",
+      "agent_type": "ops_agent",
+      "created_at": "2025-08-16T11:23:32.069032",
+      "metadata": {}
+    },
+    {
+      "id": "task_024",
+      "title": "Prepare Final Build for Deployment",
+      "description": "Package the final, tested, and optimized build for release. Acceptance Criteria: - The game is built using the production configuration. - All necessary assets, installers, and executables are included. - The build is tested one final time (smoke test) before release.",
+      "priority": 10,
+      "status": "completed",
+      "dependencies": [
+        "task_020",
+        "task_022"
+      ],
+      "estimated_hours": 8.0,
+      "complexity": "simple",
+      "agent_type": "ops_agent",
+      "created_at": "2025-08-16T11:23:33.070548",
+      "metadata": {}
+    },
+    {
+      "id": "task_025",
+      "title": "Create Technical Documentation",
+      "description": "Document the final architecture, systems, and setup process for future maintenance and team onboarding. Acceptance Criteria: - Key systems (Physics, AI, State Management) are documented. - Instructions for setting up the development environment are written. - The CI/CD pipeline and deployment process are documented.",
+      "priority": 1,
+      "status": "failed",
+      "dependencies": [
+        "task_024"
+      ],
+      "estimated_hours": 24.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-08-16T11:23:34.087345",
+      "metadata": {}
+    }
+  ],
+  "created_at": "2025-08-16T11:04:20.212359",
+  "total_estimated_hours": null,
+  "complexity_distribution": {}
+}

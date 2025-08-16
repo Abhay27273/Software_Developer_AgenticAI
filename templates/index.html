@@ -2662,8 +2662,7 @@
                         </div>
                     `;
                     this.ws.send(JSON.stringify({ type: 'request_file_content', file_path: filePath }));
-                }
-       
+               
             handleMessage(data) {
                 console.log("Received WS message:", data);
                 try {

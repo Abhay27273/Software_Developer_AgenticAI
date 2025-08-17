@@ -1437,15 +1437,10 @@ body {
                 </div>
 
                 <div class="canvas-content">
-                    <div class="canvas-tabs">
-                        <button class="canvas-tab active">
-                            <i class="fab fa-python"></i>
-                            Welcome
-                            <button class="close-btn">×</button>
-                        </button>
+                    <div class="canvas-tabs" id="canvas-tabs">
+                        <!-- Tabs will be dynamically added here -->
                     </div>
-
-                    <div class="code-editor">
+                    <div class="code-editor" id="code-editor">
                         <div class="code-content" id="file-viewer-content">
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); text-align: center;">
                                 <i class="fas fa-code" style="font-size: 48px; margin-bottom: var(--space-lg); opacity: 0.3;"></i>
@@ -2386,10 +2381,11 @@ md);&quot;&gt;&lt;/i&gt;
 &lt;p&gt;Loading ${filePath}...&lt;/p&gt;
 &lt;/div&gt;
 `;
-this.ws.send(JSON.stringify({ type: &#39;request_file_content&#39;, file_path: filePath }));
+this.ws.send(JSON.stringify({ type: 'request_file_content', file_path: filePath }));
+} // FIX 1: Added the missing closing brace for showFileContent()
 
 handleMessage(data) {
-console.log(&quot;Received WS message:&quot;, data);
+console.log("Received WS message:", data);
 try {
 switch (data.type) {
 case &#39;planning_started&#39;:
@@ -2544,9 +2540,11 @@ const errorMessage = data.message || &#39;An unknown error occurred.&#39;;
 this.addLogMessage(`Error: ${errorMessage}`, &#39;error&#39;);
 this.showMessage(`An error occurred: ${errorMessage}`);
 }
+
 handleTaskStatusUpdate(data) {
 this.addLogMessage(`[${data.agent_id}] Task &#39;${data.task_id}&#39;: ${data.status}`, &#39;info&#39;);
 // addLogMessage will still log to console for debugging, but not to UI
+}
 addLogMessage(message, type = &#39;info&#39;) {
 console.log(`[LOG - ${type.toUpperCase()}] ${message}`);
 }
@@ -2565,68 +2563,9 @@ dot.className = &#39;agent-status-dot&#39;; // Reset
 dot.classList.add(status);
 }
 }
-// Custom showMessage to allow for confirmation dialogs
-showMessage(message, isConfirm = false, onConfirm = null) {
-if (this.messageBox) {
-this.messageBox.querySelector(&#39;#custom-message-content&#39;).textContent = message;
-const okBtn = this.messageBox.querySelector(&#39;#custom-message-ok-btn&#39;);
 
-okBtn.textContent = isConfirm ? &#39;Yes&#39; : &#39;OK&#39;;
-// Remove previous event listeners to prevent multiple calls
-const newOkBtn = okBtn.cloneNode(true);
-okBtn.parentNode.replaceChild(newOkBtn, okBtn);
-this.messageBox.querySelector(&#39;#custom-message-ok-btn&#39;).addEventListener(&#39;click&#39;, () =&gt;
-{
-this.messageBox.style.display = &#39;none&#39;;
-if (isConfirm &amp;&amp; onConfirm) {
-onConfirm();
-}
-});
-// Add a &quot;No&quot; button for confirmation
-if (isConfirm) {
-const noBtn = document.createElement(&#39;button&#39;);
-noBtn.textContent = &#39;No&#39;;
-noBtn.style.cssText = `
-background-color: var(--button-bg-secondary);
-color: var(--button-text-secondary);
-padding: 10px 25px;
-border: 1px solid var(--border-color);
-border-radius: var(--border-radius-md);
-cursor: pointer;
-font-size: 16px;
-font-weight: 600;
-margin-left: 10px;
-transition: background-color 0.2s;
-`;
-noBtn.addEventListener(&#39;click&#39;, () =&gt; {
-this.messageBox.style.display = &#39;none&#39;;
-});
-// Ensure &quot;No&quot; button is added only once and after &quot;Yes&quot; button
+// FIX 3: Removed the entire duplicate showMessage method that was here.
 
-const existingNoBtn = this.messageBox.querySelector(&#39;button:last-of-
-type:not(#custom-message-ok-btn)&#39;);
-if (existingNoBtn) {
-existingNoBtn.remove();
-}
-this.messageBox.querySelector(&#39;#custom-message-
-content&#39;).insertAdjacentElement(&#39;afterend&#39;, noBtn);
-} else {
-// Remove &quot;No&quot; button if not a confirmation
-const existingNoBtn = this.messageBox.querySelector(&#39;button:last-of-
-type:not(#custom-message-ok-btn)&#39;);
-if (existingNoBtn) {
-existingNoBtn.remove();
-}
-}
-this.messageBox.style.display = &#39;flex&#39;;
-} else {
-console.warn(&quot;Custom message box not initialized. Falling back to console log:&quot;,
-message);
-if (isConfirm &amp;&amp; window.confirm(message) &amp;&amp; onConfirm) {
-onConfirm();
-}
-}
-}
 sendMessage() {
 this.addLogMessage(&#39;Send button clicked.&#39;, &#39;info&#39;);
 if (!this.ws) {

@@ -1,6 +1,0 @@
-.
-    ├── car.mtl
-    ├── car.obj
-    ├── car_rig.json
-    ├── asset_validator.py
-    └── texture_generator.py

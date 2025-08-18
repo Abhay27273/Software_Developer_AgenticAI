@@ -710,44 +710,26 @@ Please provide a complete, production-ready implementation that follows enterpri
             for filename, file_info in code_files.items():
                 code_content = file_info['content']
                 language = file_info['language']
-                
                 # Create meaningful filename using clean task title
                 if filename == 'main_code.py' or filename == 'code.py':
                     filename = f"{safe_task_title}.py"
-                
                 code_file = task_dir / filename
-                
                 try:
                     code_file.write_text(code_content, encoding="utf-8")
                     saved_files.append(filename)
                     logger.info(f"Dev Agent: Saved code file {filename} for task {task.id}")
-
                     # Send file_generated event with content for immediate viewing
-                    # Use consistent path relative to generated_code directory
                     file_path_relative = str(code_file.relative_to(DEV_OUTPUT_DIR.parent))
                     await self.websocket_manager.broadcast_message({
                         "agent_id": self.agent_id,
                         "type": "file_generated",
                         "task_id": task.id,
                         "file_name": filename,
-                        "file_path": file_path_relative.replace('\\', '/'),  # Normalize path separators
+                        "file_path": file_path_relative.replace('\\', '/'),
                         "content": code_content,
                         "file_type": language,
                         "timestamp": datetime.now().isoformat()
                     })
-
-                    # Send clean code to chat panel
-                    await self.websocket_manager.broadcast_message({
-                        "agent_id": self.agent_id,
-                        "type": "dev_agent_code_generated",
-                        "task_id": task.id,
-                        "filename": filename,
-                        "content": code_content,
-                        "language": language,
-                        "message": f"Dev Agent: Generated {filename}",
-                        "timestamp": datetime.now().isoformat()
-                    })
-
                 except Exception as file_error:
                     logger.error(f"DevAgent: Failed to write code file {filename} for task {task.id}: {file_error}", exc_info=True)
                     await self.websocket_manager.broadcast_message({
@@ -757,7 +739,6 @@ Please provide a complete, production-ready implementation that follows enterpri
                         "message": f"Dev Agent: Failed to save {filename}: {str(file_error)}",
                         "timestamp": datetime.now().isoformat()
                     })
-
             if not saved_files:
                 raise ValueError("No code files were generated or saved.")
 

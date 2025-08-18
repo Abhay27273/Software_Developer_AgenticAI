@@ -1,0 +1,81 @@
+erDiagram
+    users {
+        UUID id PK
+        VARCHAR(50) username UK
+        VARCHAR(255) email UK
+        VARCHAR(255) hashed_password
+        VARCHAR(100) full_name
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BOOLEAN is_active
+        user_role_enum role
+    }
+
+    exercises {
+        UUID id PK
+        VARCHAR(100) name UK
+        TEXT description
+        body_part_enum body_part
+        exercise_category_enum category
+        TEXT video_url
+        UUID created_by FK "Nullable, for custom user exercises"
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    workouts {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR(100) name
+        TEXT description
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    workout_exercises {
+        UUID id PK
+        UUID workout_id FK
+        UUID exercise_id FK
+        INTEGER sets
+        INTEGER reps
+        INTEGER rest_period_seconds
+        INTEGER order_index "Defines exercise order in a workout"
+    }
+
+    workout_logs {
+        UUID id PK
+        UUID user_id FK
+        UUID workout_id FK "Nullable, for ad-hoc workouts"
+        TIMESTAMPTZ start_time
+        TIMESTAMPTZ end_time
+        TEXT notes
+    }
+
+    exercise_logs {
+        UUID id PK
+        UUID workout_log_id FK
+        UUID exercise_id FK
+        TEXT notes
+    }
+
+    set_logs {
+        UUID id PK
+        UUID exercise_log_id FK
+        INTEGER set_number
+        INTEGER reps_completed
+        NUMERIC(7,2) weight
+        INTEGER duration_seconds
+        INTEGER distance_meters
+    }
+
+    users ||--o{ workouts : "creates"
+    users |o--o{ exercises : "creates"
+    users ||--o{ workout_logs : "performs"
+
+    workouts ||--|{ workout_exercises : "contains"
+    exercises ||--|{ workout_exercises : "is part of"
+
+    workout_logs ||--|{ exercise_logs : "contains"
+    exercises ||--o{ exercise_logs : "is performed in"
+
+    exercise_logs ||--|{ set_logs : "contains"

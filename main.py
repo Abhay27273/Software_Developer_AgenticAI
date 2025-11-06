@@ -179,21 +179,31 @@ async def websocket_endpoint(websocket: WebSocket):
                         if task_message["type"] == "task_created":
                             task: Task = task_message["task"] # The actual Task object
                             
+                            # Send task creation notification to PM Agent tab
                             await websocket_manager.send_personal_message({
-                                "type": "agent_output", # General message for task processing
-                                "agent_type": "pm",
-                                "content": f"PM Agent: Created task: '{task.title}' (Agent: {task.agent_type})...\n",
+                                "type": "pm_task_created",
                                 "task_id": task.id,
+                                "task_title": task.title,
+                                "agent_type": task.agent_type,
+                                "priority": task.priority,
                                 "timestamp": datetime.now().isoformat()
                             }, websocket) # Send to the specific client that initiated
 
                             if task.agent_type == "dev_agent":
+                                # Notify that Dev Agent is starting work on this task
+                                await websocket_manager.send_personal_message({
+                                    "type": "dev_agent_started",
+                                    "task_id": task.id,
+                                    "task_title": task.title,
+                                    "timestamp": datetime.now().isoformat()
+                                }, websocket)
                                 # --- Dev Agent Execution with Streaming ---
                                 await websocket_manager.send_personal_message({
                                     "type": "task_status_update",
+                                    "agent_id": "dev",
                                     "task_id": task.id,
                                     "status": TaskStatus.IN_PROGRESS.value,
-                                    "message": f"Dev Agent executing task: '{task.title}'",
+                                    "message": f"🔨 Dev Agent executing task: '{task.title}'",
                                     "timestamp": datetime.now().isoformat()
                                 }, websocket)
 
@@ -213,9 +223,10 @@ async def websocket_endpoint(websocket: WebSocket):
                                 
                                 await websocket_manager.send_personal_message({
                                     "type": "task_status_update",
+                                    "agent_id": "dev",
                                     "task_id": updated_task.id,
                                     "status": updated_task.status.value,
-                                    "message": f"Dev Agent task '{updated_task.title}' {updated_task.status.value.lower()}.",
+                                    "message": f"✅ Dev Agent task '{updated_task.title}' {updated_task.status.value.lower()}.",
                                     "timestamp": datetime.now().isoformat()
                                 }, websocket)
 
@@ -263,9 +274,10 @@ async def websocket_endpoint(websocket: WebSocket):
                             elif task.agent_type == "qa_agent":
                                 await websocket_manager.send_personal_message({
                                     "type": "task_status_update",
+                                    "agent_id": "qa",
                                     "task_id": task.id,
                                     "status": TaskStatus.IN_PROGRESS.value,
-                                    "message": f"QA Agent executing task: '{task.title}'",
+                                    "message": f"🧪 QA Agent executing task: '{task.title}'",
                                     "timestamp": datetime.now().isoformat()
                                 }, websocket)
                                 updated_task = await qa_agent.execute_task(task)
@@ -278,18 +290,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
                                 await websocket_manager.send_personal_message({
                                     "type": "task_status_update",
+                                    "agent_id": "qa",
                                     "task_id": updated_task.id,
                                     "status": updated_task.status.value,
-                                    "message": f"QA Agent task '{updated_task.title}' {updated_task.status.value.lower()}.",
+                                    "message": f"✅ QA Agent task '{updated_task.title}' {updated_task.status.value.lower()}.",
                                     "timestamp": datetime.now().isoformat()
                                 }, websocket)
 
                             elif task.agent_type == "ops_agent": # NEW: Handle ops agent tasks
                                 await websocket_manager.send_personal_message({
                                     "type": "task_status_update",
+                                    "agent_id": "ops",
                                     "task_id": task.id,
                                     "status": TaskStatus.IN_PROGRESS.value,
-                                    "message": f"Ops Agent executing task: '{task.title}'",
+                                    "message": f"🚀 Ops Agent executing task: '{task.title}'",
                                     "timestamp": datetime.now().isoformat()
                                 }, websocket)
                                 updated_task = await ops_agent.execute_task(task)
@@ -301,9 +315,10 @@ async def websocket_endpoint(websocket: WebSocket):
                                 _save_plan(planner_agent.current_plan)
                                 await websocket_manager.send_personal_message({
                                     "type": "task_status_update",
+                                    "agent_id": "ops",
                                     "task_id": updated_task.id,
                                     "status": updated_task.status.value,
-                                    "message": f"Ops Agent task '{updated_task.title}' {updated_task.status.value.lower()}.",
+                                    "message": f"✅ Ops Agent task '{updated_task.title}' {updated_task.status.value.lower()}.",
                                     "timestamp": datetime.now().isoformat()
                                 }, websocket)
 

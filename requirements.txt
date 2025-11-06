@@ -30,5 +30,6 @@ google-generativeai
 python-dotenv
 pydantic
 json5
+langgraph
 
 # File System Monitoring

@@ -15,7 +15,7 @@ from google.api_core.exceptions import GoogleAPICallError
 
 # Load .env variables
 load_dotenv()
-MODEL = os.getenv("MODEL", "gemini-2.5-pro")
+MODEL = os.getenv("MODEL", "gemini-2.5-flash")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -63,7 +63,8 @@ class LLMClient:
                       model: Optional[str] = None,
                       temperature: Optional[float] = None,
                       callback: Optional[Callable[[str], None]] = None,
-                      max_retries: int = 3) -> str:
+                      max_retries: int = 3,
+                      validate_json: bool = False) -> str:
         """Single-shot async response for all agents."""
         full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
         model_to_use = model or self.default_model
@@ -85,8 +86,8 @@ class LLMClient:
 
                 text = response.text.strip()
 
-                # Keep JSON validation here for non-streaming, full responses
-                if "json" in user_prompt.lower():
+                # Optional JSON validation for callers that require strict JSON output
+                if validate_json:
                     try:
                         json.loads(text)
                     except json.JSONDecodeError as je:
@@ -111,10 +112,10 @@ class LLMClient:
                     await asyncio.sleep(wait_time)
                 else:
                     # Use fallback only for non-streaming failures
-                    return self.get_fallback_response(user_prompt)
+                    return self.get_fallback_response(user_prompt, expects_json=validate_json)
 
         # Should theoretically not be reached if max_retries is > 0 and handles failure
-        return self.get_fallback_response(user_prompt)
+        return self.get_fallback_response(user_prompt, expects_json=validate_json)
 
     async def ask_llm_streaming(self, user_prompt: str,
                           system_prompt: Optional[str] = None,
@@ -205,11 +206,11 @@ class LLMClient:
                 else:
                     raise LLMError(f"LLM streaming failed after {max_retries} attempts: {e}")
 
-    def get_fallback_response(self, prompt: str) -> str:
+    def get_fallback_response(self, prompt: str, expects_json: bool = False) -> str:
         """Fallback response in case LLM fails to generate content for non-streaming calls."""
         logger.warning("⚠️ Using fallback due to LLM failure.")
         
-        if "json" in prompt.lower():
+        if expects_json or "json" in prompt.lower():
             return json.dumps({
                 "message": "Fallback response",
                 "error": "LLM generation failed"

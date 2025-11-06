@@ -1,1 +1,0 @@
-psql -d fitness_app -f schema.sql

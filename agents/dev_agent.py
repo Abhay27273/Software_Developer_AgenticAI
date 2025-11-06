@@ -9,13 +9,14 @@ from config import DEV_OUTPUT_DIR
 from typing import Optional, Callable, AsyncGenerator, List, Dict, Set
 import shutil
 import asyncio
+import textwrap
 from collections import defaultdict
 
 from models.task import Task
 from models.plan import Plan
 from models.enums import TaskStatus
 from parse.websocket_manager import WebSocketManager
-from utils.llm_setup import ask_llm_streaming, LLMError
+from utils.llm_setup import ask_llm_streaming, ask_llm, LLMError
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -434,31 +435,59 @@ Code Quality Standards:
 ✅ Standards Compliance: Follow PEP 8, ESLint, and industry best practices
 
 CRITICAL OUTPUT FORMAT REQUIREMENTS:
-1. SEPARATE CODE FROM DOCUMENTATION:
-   - Put ALL executable code in ```language code blocks with filename comments
-   - Put ALL explanations, setup instructions, and documentation OUTSIDE code blocks
-   - Example format:
-     ```python
-     # filename.py
-     def my_function():
-         return "Hello World"
+
+1. PROJECT STRUCTURE - CREATE PROPER FOLDER HIERARCHY:
+   - Organize files in a logical, production-ready structure
+   - Use clear folder names: src/, tests/, config/, docs/, etc.
+   - Include proper package initialization files (__init__.py)
+   - Example structure:
+     ```
+     project/
+     ├── src/
+     │   ├── __init__.py
+     │   ├── main.py
+     │   ├── models/
+     │   ├── services/
+     │   └── utils/
+     ├── tests/
+     ├── config/
+     ├── requirements.txt
+     └── README.md
      ```
 
-2. MULTIPLE FILES:
-   - Create separate code blocks for each file
-   - Use clear filename comments: ```python # main.py
-   - Include all necessary files: models, services, utilities, tests, configs
+2. FILE NAMING WITH PATHS:
+   - Use FULL paths in filename comments: ```python # src/main.py
+   - Create multiple code blocks for different files
+   - Include ALL necessary files for end-to-end testing
+   - Example:
+     ```python
+     # src/models/user.py
+     class User:
+         pass
+     ```
+     
+     ```python
+     # src/services/user_service.py
+     from src.models.user import User
+     ```
 
-3. CLEAN CODE BLOCKS:
+3. ESSENTIAL FILES TO INCLUDE:
+   - requirements.txt or package.json (dependencies)
+   - .env.example (environment variables template)
+   - README.md (setup and run instructions)
+   - config files (database, logging, etc.)
+   - Test files (unit and integration tests)
+   - Docker files if applicable
+
+4. CLEAN CODE BLOCKS:
    - Code blocks should contain ONLY executable code and inline comments
    - NO markdown explanations inside code blocks
    - NO setup instructions inside code blocks
-   - NO architecture descriptions inside code blocks
 
-4. DOCUMENTATION OUTSIDE CODE:
-   - Provide setup instructions, explanations, and architecture notes outside code blocks
+5. DOCUMENTATION OUTSIDE CODE:
+   - Provide setup instructions, explanations OUTSIDE code blocks
    - Use markdown headers (##) for documentation sections
-   - Explain dependencies, configuration, and deployment steps
+   - Explain how to run and test the project
 
 Context Awareness:
 Pay attention to the PROJECT CONTEXT provided in the task description
@@ -539,7 +568,7 @@ Please provide a complete, production-ready implementation that follows enterpri
             async for _ in ask_llm_streaming(
                 user_prompt=user_prompt,
                 system_prompt=system_prompt,
-                model="gemini-2.5-pro",
+                model="gemini-2.5-flash",
                 temperature=0.3,
                 callback=stream_chunk_callback
             ):
@@ -581,6 +610,7 @@ Please provide a complete, production-ready implementation that follows enterpri
         """
         Extract code blocks from LLM response and separate them from documentation.
         Returns a dictionary with 'code_files' and 'documentation'.
+        Supports file paths like: # src/main.py or # config/settings.py
         """
         import re
         
@@ -605,21 +635,38 @@ Please provide a complete, production-ready implementation that follows enterpri
             
             # Determine filename from comment or use default
             if comment_line:
-                # Extract filename from comment like "# filename.py"
-                filename_match = re.search(r'([a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9]+)', comment_line)
+                # Extract filename/path from comment like "# src/main.py" or "# filename.py"
+                # Support full paths with forward slashes
+                filename_match = re.search(r'([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)', comment_line)
                 if filename_match:
-                    filename = filename_match.group(1)
+                    filename = filename_match.group(1).replace('\\', '/')  # Normalize path separators
                 else:
-                    filename = f"code.{language}"
+                    # If no extension found, try to extract any path-like string
+                    path_match = re.search(r'([a-zA-Z0-9_\-\./\\]+)', comment_line)
+                    if path_match:
+                        filename = path_match.group(1).replace('\\', '/')
+                    else:
+                        filename = f"code.{language}"
             else:
                 # Use language extension
                 ext_map = {
                     'python': 'py', 'javascript': 'js', 'typescript': 'ts',
                     'html': 'html', 'css': 'css', 'json': 'json',
-                    'yaml': 'yml', 'sql': 'sql', 'bash': 'sh'
+                    'yaml': 'yml', 'sql': 'sql', 'bash': 'sh', 'txt': 'txt'
                 }
                 ext = ext_map.get(language.lower(), 'txt')
                 filename = f"code.{ext}"
+            
+            # Avoid duplicates by appending counter if filename exists
+            original_filename = filename
+            counter = 1
+            while filename in code_files:
+                if '.' in original_filename:
+                    name, ext = original_filename.rsplit('.', 1)
+                    filename = f"{name}_{counter}.{ext}"
+                else:
+                    filename = f"{original_filename}_{counter}"
+                counter += 1
             
             code_files[filename] = {
                 'content': code_content,
@@ -705,19 +752,27 @@ Please provide a complete, production-ready implementation that follows enterpri
                     "timestamp": datetime.now().isoformat()
                 })
 
-            # Save each code file separately
+            # Save each code file separately, preserving directory structure
             saved_files = []
             for filename, file_info in code_files.items():
                 code_content = file_info['content']
                 language = file_info['language']
-                # Create meaningful filename using clean task title
-                if filename == 'main_code.py' or filename == 'code.py':
+                
+                # Create meaningful filename using clean task title for generic names
+                if filename in ['main_code.py', 'code.py', 'code.txt']:
                     filename = f"{safe_task_title}.py"
+                
+                # Handle file paths (e.g., "src/main.py" or "tests/test_main.py")
                 code_file = task_dir / filename
+                
+                # Create parent directories if they don't exist
+                code_file.parent.mkdir(parents=True, exist_ok=True)
+                
                 try:
                     code_file.write_text(code_content, encoding="utf-8")
                     saved_files.append(filename)
                     logger.info(f"Dev Agent: Saved code file {filename} for task {task.id}")
+                    
                     # Send file_generated event with content for immediate viewing
                     file_path_relative = str(code_file.relative_to(DEV_OUTPUT_DIR.parent))
                     await self.websocket_manager.broadcast_message({
@@ -751,7 +806,7 @@ Please provide a complete, production-ready implementation that follows enterpri
                 "estimated_hours": task.estimated_hours,
                 "dependencies": task.dependencies,
                 "completed_at": datetime.now().isoformat(),
-                "output_files": [str(main_file.relative_to(DEV_OUTPUT_DIR))]
+                "output_files": saved_files  # List of saved file names
             }
 
             metadata_file = task_dir / "task_metadata.json"
@@ -778,7 +833,7 @@ Please provide a complete, production-ready implementation that follows enterpri
                 "task_id": task.id,
                 "status": task.status.value,
                 "output_directory": str(task_dir.relative_to(DEV_OUTPUT_DIR.parent)),
-                "main_file": str(main_file.relative_to(DEV_OUTPUT_DIR.parent)),
+                "saved_files": saved_files,
                 "message": f"Dev Agent completed task: '{task.title}'",
                 "timestamp": datetime.now().isoformat()
             })
@@ -1165,11 +1220,17 @@ Please provide a complete, production-ready implementation that follows enterpri
         original_code = file_path.read_text(encoding="utf-8")
         
         # Create a comprehensive fix prompt
-        issues_description = "\n".join([
-            f"- {issue['issue_type']}: {issue['description']}" + 
-            (f" (Line {issue['line_number']})" if issue.get('line_number') else "")
-            for issue in issues
-        ])
+        issues_description_parts = []
+        for issue in issues:
+            entry = f"- {issue['issue_type']}: {issue['description']}"
+            if issue.get('line_number'):
+                entry += f" (Line {issue['line_number']})"
+            if issue.get('code_context'):
+                context = textwrap.indent(issue['code_context'].strip(), "    ")
+                entry += f"\n  Context:\n{context}"
+            issues_description_parts.append(entry)
+
+        issues_description = "\n".join(issues_description_parts)
         
         fix_prompt = f"""
 You are a Senior Software Developer fixing code issues reported by QA.
@@ -1201,7 +1262,7 @@ Return ONLY the complete fixed code, no explanations or markdown:
             fixed_code = await ask_llm(
                 user_prompt=fix_prompt,
                 system_prompt="You are a software developer fixing code issues. Return only the corrected Python code without any markdown formatting or explanations.",
-                model="gemini-2.5-pro",
+                model="gemini-2.5-flash",
                 temperature=0.2
             )
             

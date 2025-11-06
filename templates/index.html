@@ -330,6 +330,101 @@
             overflow-y: auto;
             box-shadow: var(--shadow-light); /* Subtle shadow */
         }
+        #pm-agent-output {
+            font-family: var(--font-primary);
+            background: transparent;
+            border: none;
+            padding: 0;
+            box-shadow: none;
+        }
+        #pm-agent-output .pm-task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        #pm-agent-output .pm-task-item {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: 12px 14px;
+            box-shadow: var(--shadow-light);
+        }
+        #pm-agent-output .pm-task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 10px;
+        }
+        #pm-agent-output .pm-task-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        #pm-agent-output .pm-task-meta {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #pm-agent-output .pm-task-status {
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+        #pm-agent-output .pm-task-status.pending {
+            background: #fff4e5;
+            color: #b26a00;
+        }
+        #pm-agent-output .pm-task-status.in-progress {
+            background: #e6f0ff;
+            color: #0043ce;
+        }
+        #pm-agent-output .pm-task-status.completed {
+            background: #e6f7ed;
+            color: #0f7b45;
+        }
+        #pm-agent-output .pm-task-status.failed {
+            background: #fdecea;
+            color: #b71c1c;
+        }
+        #pm-agent-output .pm-task-log {
+            margin-top: 20px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-light);
+            overflow: hidden;
+        }
+        #pm-agent-output .pm-task-log-header {
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-secondary);
+            background: #f7f9fc;
+            border-bottom: 1px solid var(--border-color);
+        }
+        #pm-agent-output .pm-task-log-body {
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 14px;
+            font-family: var(--font-monospace);
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            background: #fcfdff;
+        }
+        #pm-agent-output .pm-task-log-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        #pm-agent-output .pm-task-log-body::-webkit-scrollbar-thumb {
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
         .chat-message {
             display: flex;
             align-items: flex-start;
@@ -961,6 +1056,10 @@
                 this.currentProjectNameElement = null; // For project renaming
                 this.contextMenu = null; // For file context menu
                 this.contextMenuTargetFile = null; // Stores the path of the file right-clicked
+                this.pmTasks = new Map(); // Track tasks created by PM agent
+                this.pmTaskListElement = null;
+                this.pmAgentLogBody = null;
+                this.hasAnnouncedPmWork = false;
                 // Setup phase 1: Initialize DOM elements and event listeners
                 this.initializeElements();
                 this.bindEvents();
@@ -988,6 +1087,29 @@
                 this.pmAgentOutput = document.getElementById('pm-agent-output');
                 this.devAgentOutput = document.getElementById('dev-agent-output');
                 this.qaAgentOutput = document.getElementById('qa-agent-output');
+                if (this.pmAgentOutput && (!this.pmTaskListElement || !this.pmAgentLogBody)) {
+                    this.pmAgentOutput.innerHTML = '';
+
+                    this.pmTaskListElement = document.createElement('div');
+                    this.pmTaskListElement.className = 'pm-task-list';
+
+                    const logContainer = document.createElement('div');
+                    logContainer.className = 'pm-task-log';
+
+                    const logHeader = document.createElement('div');
+                    logHeader.className = 'pm-task-log-header';
+                    logHeader.textContent = 'Planning activity';
+
+                    this.pmAgentLogBody = document.createElement('pre');
+                    this.pmAgentLogBody.className = 'pm-task-log-body';
+                    this.pmAgentLogBody.textContent = '';
+
+                    logContainer.appendChild(logHeader);
+                    logContainer.appendChild(this.pmAgentLogBody);
+
+                    this.pmAgentOutput.appendChild(this.pmTaskListElement);
+                    this.pmAgentOutput.appendChild(logContainer);
+                }
                 // File viewer elements
                 this.fileTree = document.getElementById('file-tree');
                 this.fileViewerFilename = document.getElementById('file-viewer-filename');
@@ -1108,6 +1230,55 @@
                 // Scroll to bottom
                 this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
             }
+            updatePmTask(taskId, updates) {
+                if (!taskId) return;
+                const existing = this.pmTasks.get(taskId) || {};
+                const merged = { ...existing, ...updates };
+                this.pmTasks.set(taskId, merged);
+                this.renderPmTaskList();
+            }
+            renderPmTaskList() {
+                if (!this.pmTaskListElement) return;
+                this.pmTaskListElement.innerHTML = '';
+                if (!this.pmTasks.size) {
+                    const emptyState = document.createElement('div');
+                    emptyState.className = 'pm-task-item';
+                    emptyState.textContent = 'No tasks created yet. PM Agent will list tasks here as they are defined.';
+                    this.pmTaskListElement.appendChild(emptyState);
+                    return;
+                }
+                const tasks = Array.from(this.pmTasks.values());
+                tasks.forEach(task => {
+                    const item = document.createElement('div');
+                    item.className = 'pm-task-item';
+                    const header = document.createElement('div');
+                    header.className = 'pm-task-header';
+                    const title = document.createElement('div');
+                    title.className = 'pm-task-title';
+                    title.textContent = task.title || 'Untitled Task';
+                    const status = document.createElement('span');
+                    status.className = `pm-task-status ${task.status || 'pending'}`;
+                    status.textContent = (task.status || 'pending').replace('-', ' ');
+                    header.appendChild(title);
+                    header.appendChild(status);
+                    const meta = document.createElement('div');
+                    meta.className = 'pm-task-meta';
+                    const metaParts = [];
+                    if (task.agent) metaParts.push(`👤 Agent: ${task.agent.replace('_agent', '').toUpperCase()}`);
+                    if (task.priority !== undefined) metaParts.push(`⭐ Priority: ${task.priority}`);
+                    if (task.outputDir) metaParts.push(`📁 ${task.outputDir}`);
+                    if (task.lastGeneratedFile) metaParts.push(`📄 ${task.lastGeneratedFile}`);
+                    meta.innerHTML = metaParts.map(part => `<span>${part}</span>`).join('');
+                    item.appendChild(header);
+                    item.appendChild(meta);
+                    this.pmTaskListElement.appendChild(item);
+                });
+            }
+            appendPmPlanningLog(content) {
+                if (!content || !this.pmAgentLogBody) return;
+                this.pmAgentLogBody.textContent += content;
+                this.pmAgentLogBody.scrollTop = this.pmAgentLogBody.scrollHeight;
+            }
             // Adds copy buttons to code blocks within a given element
             addCopyButtonsToCodeBlocks(element) {
                 element.querySelectorAll('pre > code').forEach(codeBlock => {
@@ -1168,9 +1339,18 @@
                 this.setTypingIndicator(false); // Hide typing indicator
             }
             clearAgentOutputs() {
-                this.pmAgentOutput.textContent = '';
-                this.devAgentOutput.textContent = '';
-                this.qaAgentOutput.textContent = '';
+                this.pmTasks.clear();
+                this.renderPmTaskList();
+                this.hasAnnouncedPmWork = false;
+                if (this.pmAgentLogBody) {
+                    this.pmAgentLogBody.textContent = '';
+                }
+                if (this.devAgentOutput) {
+                    this.devAgentOutput.textContent = '';
+                }
+                if (this.qaAgentOutput) {
+                    this.qaAgentOutput.textContent = '';
+                }
             }
             clearProjectFiles() {
                 const welcomeContent = this.projectFiles['welcome'];
@@ -1710,7 +1890,7 @@
                 try {
                     switch (data.type) {
                         case 'planning_started':
-                            this.addChatMessage(data.message, 'ai');
+                            this.addChatMessage('🤖 PM Agent is analyzing your requirements and creating a plan...', 'ai');
                             this.showActiveAgentPanel('chat'); // Ensure chat is active
                             this.setTypingIndicator(true); // Show typing indicator
                             this.setAgentStatus('chat', 'running'); // Set chat agent status to running
@@ -1719,8 +1899,25 @@
                             // Route agent_output to specific panel if agent_type is provided
                             if (data.agent_type && this[`${data.agent_type}AgentOutput`]) {
                                 const outputPanel = this[`${data.agent_type}AgentOutput`];
-                                outputPanel.textContent += data.content;
-                                outputPanel.scrollTop = outputPanel.scrollHeight;
+                                
+                                // For QA and Ops agents, show in their respective tabs
+                                if (data.agent_type === 'qa' || data.agent_type === 'ops') {
+                                    outputPanel.textContent += data.content;
+                                    outputPanel.scrollTop = outputPanel.scrollHeight;
+                                    // Also show brief status in chat
+                                    this.addChatMessage(`[${data.agent_type.toUpperCase()}] ${data.content}`, 'ai');
+                                }
+                                // PM agent is handled by pm_task_created and dev_agent_started events
+                                else if (data.agent_type === 'pm') {
+                                    // Skip - PM messages handled separately
+                                    this.addLogMessage('PM Agent messages handled by dedicated events.', 'info');
+                                }
+                                // For dev agent, only show in dev tab (not in chat)
+                                else if (data.agent_type === 'dev') {
+                                    // Don't add to chat - only to dev panel
+                                    this.addLogMessage('Dev Agent output routed to Dev Agent tab.', 'info');
+                                }
+                                
                                 if (this.activeAgentTab !== data.agent_type) {
                                     this.addLogMessage(`${data.agent_type.toUpperCase()} Agent is active. Switch to ${data.agent_type.toUpperCase()} tab to see output.`, 'info');
                                 }
@@ -1730,44 +1927,41 @@
                             }
                             break;
                         case 'pm_agent_llm_streaming_chunk':
-                            this.pmAgentOutput.textContent += data.content;
-                            this.pmAgentOutput.scrollTop = this.pmAgentOutput.scrollHeight;
+                            // Show PM Agent raw output in a dedicated planning log
+                            this.appendPmPlanningLog(data.content || '');
                             this.setAgentStatus('pm', 'running');
                             if (this.activeAgentTab !== 'pm') {
                                 this.addLogMessage('PM Agent is active. Switch to PM tab to see output.', 'info');
                             }
                             break;
+                        case 'pm_task_created':
+                            this.updatePmTask(data.task_id, {
+                                id: data.task_id,
+                                title: data.task_title,
+                                agent: data.agent_type,
+                                priority: data.priority || 'N/A',
+                                status: 'pending'
+                            });
+                            // Chat: Only acknowledge PM working when first task created
+                            if (!this.hasAnnouncedPmWork) {
+                                this.addChatMessage('🤖 PM Agent is mapping out the plan and assigning tasks...', 'ai');
+                                this.hasAnnouncedPmWork = true;
+                            }
+                            break;
+                        case 'dev_agent_started':
+                            this.updatePmTask(data.task_id, { status: 'in-progress' });
+                            this.addChatMessage(`🔨 Dev Agent started coding: "${data.task_title}"`, 'ai');
+                            break;
                         case 'dev_agent_llm_streaming_chunk':
                             if (!this.devAgentOutput.dataset.rawContent) this.devAgentOutput.dataset.rawContent = '';
                             this.devAgentOutput.dataset.rawContent += data.content;
-                            // Extract code blocks and non-code context
-                            const codeBlocks = [];
-                            const contextBlocks = [];
-                            const tripleBacktickRegex = /```([\w\d]*)\n([\s\S]*?)```/g;
-                            let lastIndex = 0;
-                            let match;
-                            while ((match = tripleBacktickRegex.exec(data.content)) !== null) {
-                                if (match.index > lastIndex) {
-                                    // Add context before code block
-                                    contextBlocks.push(data.content.slice(lastIndex, match.index));
-                                }
-                                codeBlocks.push({ lang: match[1] || 'plaintext', code: match[2] });
-                                lastIndex = tripleBacktickRegex.lastIndex;
-                            }
-                            if (lastIndex < data.content.length) {
-                                contextBlocks.push(data.content.slice(lastIndex));
-                            }
-                            // Show context only in chat, code only in dev panel
-                            contextBlocks.forEach(ctx => {
-                                if (ctx.trim()) this.addChatMessage(ctx, 'ai');
-                            });
-                            // Always update dev panel if active
-                            if (this.activeAgentTab === 'dev') {
-                                this.showDevAgentCodeOnly();
-                            }
+
+                            // Keep streaming output in Dev tab only (no chat noise)
+                            this.showDevAgentCodeOnly();
                             this.setAgentStatus('dev', 'running');
+                            
                             if (this.activeAgentTab !== 'dev') {
-                                this.addLogMessage('Dev Agent is active. Switch to Dev tab to see output.', 'info');
+                                this.addLogMessage('Dev Agent is generating code. Switch to Dev Agent (live code) tab to see output.', 'info');
                             }
                             break;
                         case 'qa_agent_llm_streaming_chunk':
@@ -1783,31 +1977,81 @@
                             this.setTypingIndicator(false); // Hide typing indicator
                             this.setAgentStatus(data.agent_id || 'chat', 'complete'); // Set specific agent status to complete
                             break;
-                        case 'progress':
-                            this.addLogMessage(`Progress: ${data.message} (${data.progress}%)`, 'info');
-                            break;
-                        case 'planning_completed':
-                            this.addChatMessage('✅ Planning successfully completed!', 'ai');
-                            this.addLogMessage('✅ Planning successfully completed!', 'info');
-                            this.sendMessageBtn.disabled = false;
-                            this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
-                            this.showActiveAgentPanel('chat'); // Return to chat after completion
-                            this.setTypingIndicator(false); // Hide typing indicator
-                            this.setAgentStatus('chat', 'complete'); // Set chat agent status to complete
-                            this.setAgentStatus('pm', 'idle'); // Reset other agents to idle
-                            this.setAgentStatus('dev', 'idle');
-                            this.setAgentStatus('qa', 'idle');
-                            break;
                         case 'task_status_update':
+                            if (data.agent_id === 'dev') {
+                                if (data.status === 'completed') {
+                                    this.updatePmTask(data.task_id, { status: 'completed', outputDir: data.output_directory, files: data.saved_files });
+                                    const outputPath = data.output_directory ? `📁 Files ready in ${data.output_directory}` : '📁 Files ready in generated code folder';
+                                    this.addChatMessage(`✅ Code ready! ${outputPath}`, 'ai');
+                                } else if (data.status === 'failed') {
+                                    this.updatePmTask(data.task_id, { status: 'failed' });
+                                    this.addChatMessage('❌ Code generation failed. Please review errors.', 'ai');
+                                }
+                            } else if (data.agent_id === 'qa') {
+                                if (data.status === 'completed') {
+                                    this.addChatMessage(`✅ Testing completed successfully!`, 'ai');
+                                } else if (data.status === 'failed') {
+                                    this.addChatMessage(`❌ Testing failed. Review needed.`, 'ai');
+                                }
+                            } else if (data.agent_id === 'ops') {
+                                if (data.status === 'completed') {
+                                    this.addChatMessage(`✅ Deployment completed successfully!`, 'ai');
+                                } else if (data.status === 'failed') {
+                                    this.addChatMessage(`⚠️ Deployment issue: ${data.message || data.status}`, 'ai');
+                                }
+                            }
+                            // Log detailed info for debugging
                             this.addLogMessage(`[${data.agent_id}] Task '${data.task_id}': ${data.status}`, 'info');
-                            // Can update specific agent status more granularly here if needed
+                            break;
+                        case 'dev_task_complete_init_qa':
+                            this.addChatMessage(`🧪 QA Agent is now testing the new code...`, 'ai');
+                            break;
+                        case 'qa_task_failed':
+                            this.addChatMessage(`❌ QA reported an issue. The dev team will take another look.`, 'ai');
+                            break;
+                        case 'dev_task_failed':
+                            this.addChatMessage(`❌ Code generation failed. Retrying...`, 'ai');
+                            break;
+                        case 'all_dev_tasks_complete_init_ops':
+                            this.addChatMessage(`🚀 All development tasks done! Deployment is starting...`, 'ai');
+                            break;
+                        case 'ops_deployment_status':
+                            if (data.status === 'completed') {
+                                this.addChatMessage(`✅ Deployment successful! Your project is live.`, 'ai');
+                            } else {
+                                this.addChatMessage(`⚠️ Deployment status: ${data.status}`, 'ai');
+                            }
                             break;
                         case 'file_generated':
+                            if (data.task_id) {
+                                this.updatePmTask(data.task_id, { lastGeneratedFile: data.file_name });
+                            }
                             // Only add code files to the sidebar, not .txt/.md/.json (unless config or code)
                             if (data.file_name && !/\.(txt|md)$/i.test(data.file_name)) {
                                 this.handleFileGenerated(data);
                                 this.renderFileTree();
-                                // Do NOT show file creation notification in chat panel for dev agent
+                                // Show file notification in Dev Agent tab, not chat
+                                if (this.devAgentOutput) {
+                                    const fileNotice = document.createElement('div');
+                                    fileNotice.className = 'file-notice';
+                                    fileNotice.style.cssText = 'padding: 8px; margin: 8px 0; background: #e6f7ff; border-left: 3px solid #1890ff; color: #0050b3; font-size: 14px;';
+                                    fileNotice.textContent = `📄 Generated: ${data.file_name}`;
+                                    this.devAgentOutput.appendChild(fileNotice);
+                                }
+                                this.addLogMessage(`File generated: ${data.file_path}`, 'info');
+                            }
+                            break;
+                            if (data.file_name && !/\.(txt|md)$/i.test(data.file_name)) {
+                                this.handleFileGenerated(data);
+                                this.renderFileTree();
+                                // Show file notification in Dev Agent tab, not chat
+                                if (this.devAgentOutput) {
+                                    const fileNotice = document.createElement('div');
+                                    fileNotice.className = 'file-notice';
+                                    fileNotice.style.cssText = 'padding: 8px; margin: 8px 0; background: #e6f7ff; border-left: 3px solid #1890ff; color: #0050b3; font-size: 14px;';
+                                    fileNotice.textContent = `📄 Generated: ${data.file_name}`;
+                                    this.devAgentOutput.appendChild(fileNotice);
+                                }
                                 this.addLogMessage(`File generated: ${data.file_path}`, 'info');
                             }
                             break;

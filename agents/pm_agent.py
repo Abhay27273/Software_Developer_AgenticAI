@@ -172,7 +172,7 @@ Provide a detailed, actionable plan that a development team can follow from star
             "type": "llm_request",
             "timestamp": datetime.now().isoformat(),
             "message": "Sending request to LLM for plan generation...",
-            "llm_model": "gemini-2.5-pro"  # Indicate which model is being used
+            "llm_model": "gemini-2.5-flash"  # Indicate which model is being used
         }, websocket)
 
         full_response_content = []
@@ -181,7 +181,7 @@ Provide a detailed, actionable plan that a development team can follow from star
             async for chunk in ask_llm_streaming(  # <-- This is where ask_llm_streaming is called
                 user_prompt=prompt,
                 system_prompt=system_prompt,
-                model="gemini-2.5-pro",  # Using 'pro' for planning as it's typically more robust for structured output
+                model="gemini-2.5-flash",  # Using 'pro' for planning as it's typically more robust for structured output
                 temperature=0.7  # A bit lower temperature for more consistent JSON
             ):
                 # Stream each chunk back to the client
@@ -352,8 +352,9 @@ Provide a detailed, actionable plan that a development team can follow from star
                     fallback_response = await ask_llm(
                         user_prompt=self._construct_prompt(user_input),
                         system_prompt=self._get_system_prompt(),
-                        model="gemini-2.5-pro",
-                        temperature=0.5 # Use a slightly lower temp for reliability
+                        model="gemini-2.5-flash",
+                        temperature=0.5, # Use a slightly lower temp for reliability
+                        validate_json=True
                     )
                     cleaned_json_str = PlanParser.clean_json_string(fallback_response)
                     parsed_data = json5.loads(cleaned_json_str)

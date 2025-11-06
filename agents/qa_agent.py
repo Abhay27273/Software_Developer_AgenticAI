@@ -113,7 +113,7 @@ class QAAgent:
                 "test_results": [],
                 "issues_found": [],
                 "fix_attempts": 0,
-                "max_fix_attempts": 3,
+                "max_fix_attempts": 5,
                 "current_file": "",
                 "messages": [HumanMessage(content=f"Starting QA for task: {task.title}")],
                 "qa_status": "testing"
@@ -135,11 +135,14 @@ class QAAgent:
                 })
             else:
                 task.status = TaskStatus.FAILED
+                failure_message = f"❌ QA Agent: Testing failed for '{task.title}' after {final_state['fix_attempts']} fix attempts"
+                if final_state["fix_attempts"] >= final_state["max_fix_attempts"]:
+                    failure_message += ". Escalating to human review for final resolution."
                 await self.websocket_manager.broadcast_message({
                     "agent_id": self.agent_id,
                     "type": "qa_failed",
                     "task_id": task.id,
-                    "message": f"❌ QA Agent: Testing failed for '{task.title}' after {final_state['fix_attempts']} fix attempts",
+                    "message": failure_message,
                     "issues": final_state["issues_found"],
                     "timestamp": datetime.now().isoformat()
                 })
@@ -159,32 +162,41 @@ class QAAgent:
 
     async def _run_workflow(self, initial_state: QAState) -> QAState:
         """Run the LangGraph workflow asynchronously."""
-        current_state = initial_state
-        
-        # Since LangGraph might not have full async support, we'll simulate the workflow
-        # In a real implementation, you'd use: await self.workflow.ainvoke(initial_state)
-        
-        # For now, let's run the workflow steps manually
-        current_state = await self._load_code_files(current_state)
-        current_state = await self._run_comprehensive_tests(current_state)
-        
-        while current_state["qa_status"] == "testing" and current_state["fix_attempts"] < current_state["max_fix_attempts"]:
-            if self._should_analyze_issues(current_state) == "analyze":
-                current_state = await self._analyze_test_results(current_state)
-                current_state = await self._generate_code_fixes(current_state)
-                
-                fix_decision = self._should_apply_fixes(current_state)
-                if fix_decision == "apply":
-                    current_state = await self._apply_fixes_to_code(current_state)
-                    current_state = await self._run_comprehensive_tests(current_state)
-                elif fix_decision == "communicate":
-                    current_state = await self._communicate_with_dev_agent(current_state)
-                    break
-                else:
-                    break
-            else:
+        current_state = await self._load_code_files(initial_state)
+
+        while True:
+            current_state = await self._run_comprehensive_tests(current_state)
+
+            if self._should_analyze_issues(current_state) == "pass":
+                # All checks passed
+                current_state["qa_status"] = "completed"
                 break
-        
+
+            if current_state["fix_attempts"] >= current_state["max_fix_attempts"]:
+                current_state["qa_status"] = "failed"
+                break
+
+            current_state = await self._analyze_test_results(current_state)
+            current_state = await self._generate_code_fixes(current_state)
+
+            decision = self._should_apply_fixes(current_state)
+
+            if decision == "apply":
+                current_state = await self._apply_fixes_to_code(current_state)
+                if current_state["qa_status"] == "failed":
+                    break
+                # Loop continues to re-run tests
+                continue
+            elif decision == "communicate":
+                current_state = await self._communicate_with_dev_agent(current_state)
+                if current_state["qa_status"] == "failed":
+                    break
+                # Loop continues with reloaded code and re-testing
+                continue
+            else:
+                current_state["qa_status"] = "failed"
+                break
+
         current_state = await self._finalize_qa_results(current_state)
         return current_state
 
@@ -217,13 +229,14 @@ class QAAgent:
         
         code_files = {}
         if task_dir.exists():
-            for file_path in task_dir.glob("*.py"):
+            for file_path in task_dir.rglob("*.py"):
                 try:
+                    relative_key = file_path.relative_to(task_dir).as_posix()
                     content = file_path.read_text(encoding="utf-8")
-                    code_files[file_path.name] = content
-                    logger.info(f"QA Agent: Loaded {file_path.name}")
+                    code_files[relative_key] = content
+                    logger.info(f"QA Agent: Loaded {relative_key}")
                 except Exception as e:
-                    logger.warning(f"QA Agent: Failed to load {file_path.name}: {e}")
+                    logger.warning(f"QA Agent: Failed to load {file_path}: {e}")
         
         if not code_files:
             raise FileNotFoundError(f"No Python files found in {task_dir}")
@@ -280,9 +293,11 @@ class QAAgent:
     async def _analyze_test_results(self, state: QAState) -> QAState:
         """Analyze test results and identify issues."""
         issues_found = []
+        code_files = state.get("code_files", {})
         
         for file_result in state["test_results"]:
             filename = file_result["filename"]
+            file_code = code_files.get(filename, "")
             
             # Check for syntax issues
             if not file_result["syntax_check"]["passed"]:
@@ -291,7 +306,8 @@ class QAAgent:
                     "issue_type": "syntax",
                     "description": file_result["syntax_check"]["error"],
                     "line_number": file_result["syntax_check"].get("line_number"),
-                    "suggested_fix": None
+                    "suggested_fix": None,
+                    "code_context": self._extract_code_context(file_code, file_result["syntax_check"].get("line_number"))
                 })
             
             # Check for style issues
@@ -301,7 +317,8 @@ class QAAgent:
                     "issue_type": "style",
                     "description": file_result["style_check"]["error"],
                     "line_number": None,
-                    "suggested_fix": None
+                    "suggested_fix": None,
+                    "code_context": self._extract_code_context(file_code)
                 })
             
             # Check for runtime issues
@@ -311,7 +328,8 @@ class QAAgent:
                     "issue_type": "runtime",
                     "description": file_result["runtime_check"]["error"],
                     "line_number": None,
-                    "suggested_fix": None
+                    "suggested_fix": None,
+                    "code_context": self._extract_code_context(file_code)
                 })
             
             # Check for test failures
@@ -321,7 +339,8 @@ class QAAgent:
                     "issue_type": "test_failure",
                     "description": file_result["unit_tests"]["error"],
                     "line_number": None,
-                    "suggested_fix": None
+                    "suggested_fix": None,
+                    "code_context": self._extract_code_context(file_code)
                 })
         
         state["issues_found"] = issues_found
@@ -370,6 +389,7 @@ class QAAgent:
             "timestamp": datetime.now().isoformat()
         })
         
+        applied_any_fix = False
         for issue in state["issues_found"]:
             if issue.get("suggested_fix"):
                 filename = issue["file_path"]
@@ -379,15 +399,18 @@ class QAAgent:
                 
                 # Save the fixed code back to file
                 await self._save_fixed_code(filename, fixed_code, task)
+                applied_any_fix = True
         
         # Clear issues for re-testing
         state["issues_found"] = []
+        state["qa_status"] = "testing" if applied_any_fix else "failed"
         
         return state
 
     async def _communicate_with_dev_agent(self, state: QAState) -> QAState:
         """Communicate with Dev Agent for complex issues that need manual intervention."""
         task = state["task"]
+        state["fix_attempts"] += 1
         
         await self.websocket_manager.broadcast_message({
             "agent_id": self.agent_id,
@@ -465,6 +488,9 @@ class QAAgent:
         if state["fix_attempts"] >= state["max_fix_attempts"]:
             return "fail"
         
+        if any(issue.get("llm_failed") for issue in state["issues_found"]):
+            return "communicate"
+
         # Check if issues are simple enough to auto-fix
         simple_issues = ["syntax", "style"]
         complex_issues = ["runtime", "test_failure"]
@@ -479,6 +505,47 @@ class QAAgent:
         else:
             return "fail"    
 # Helper methods for testing and fixing
+
+    def _extract_code_context(self, code_content: str, line_number: Optional[int] = None, window: int = 6) -> str:
+        """Extract a snippet of code around a line number for context."""
+        if not code_content:
+            return ""
+
+        lines = code_content.splitlines()
+        if not lines:
+            return ""
+
+        if line_number and 1 <= line_number <= len(lines):
+            start = max(0, line_number - window - 1)
+            end = min(len(lines), line_number + window)
+            snippet = lines[start:end]
+        else:
+            # Provide the first few lines as context when line number unavailable
+            snippet = lines[: min(len(lines), window * 2)]
+
+        return "\n".join(snippet)
+
+    def _is_llm_fallback_response(self, response: Optional[str]) -> bool:
+        """Detect whether the LLM response is a fallback/apology instead of real code."""
+        if not response:
+            return True
+
+        normalized = response.strip().lower()
+        if not normalized:
+            return True
+
+        fallback_markers = (
+            "i apologize",
+            "fallback response",
+            "llm generation failed"
+        )
+        return any(marker in normalized for marker in fallback_markers)
+
+    def _flag_issue_for_manual_review(self, issue: Dict, reason: str) -> None:
+        """Tag an issue so the workflow escalates to the Dev Agent."""
+        issue["llm_failed"] = True
+        issue["description"] = f"{issue['description']} (Manual review required: {reason})"
+
     
     async def _check_syntax(self, filename: str, code_content: str) -> Dict:
         """Check Python syntax."""
@@ -618,8 +685,18 @@ Return ONLY the test code, no explanations:
                 user_prompt=prompt,
                 system_prompt="You are a QA engineer generating pytest unit tests. Return only executable Python test code.",
                 model="gemini-2.5-pro",
-                temperature=0.3
+                temperature=0.3,
+                validate_json=False
             )
+            if self._is_llm_fallback_response(test_code):
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "qa_llm_warning",
+                    "task_id": task.id,
+                    "message": "⚠️ QA Agent: LLM could not generate unit tests automatically. Proceeding without tests.",
+                    "timestamp": datetime.now().isoformat()
+                })
+                return ""
             return test_code
         except Exception as e:
             logger.error(f"Failed to generate unit tests: {e}")
@@ -634,6 +711,8 @@ Issue Type: {issue['issue_type']}
 Issue Description: {issue['description']}
 File: {issue['file_path']}
 {f"Line: {issue['line_number']}" if issue.get('line_number') else ""}
+
+{"Code Context:\n```python\n" + issue.get('code_context', '') + "\n```" if issue.get('code_context') else ""}
 
 Original Code:
 ```python
@@ -657,11 +736,23 @@ Return ONLY the fixed code, no explanations:
                 user_prompt=prompt,
                 system_prompt="You are a software developer fixing code issues. Return only the corrected Python code.",
                 model="gemini-2.5-pro",
-                temperature=0.2
+                temperature=0.2,
+                validate_json=False
             )
+            if self._is_llm_fallback_response(fixed_code):
+                self._flag_issue_for_manual_review(issue, "LLM returned fallback response while generating fix")
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "qa_llm_warning",
+                    "task_id": task.id,
+                    "message": f"⚠️ QA Agent: Automated fix unavailable for {issue['file_path']}. Requesting Dev Agent support.",
+                    "timestamp": datetime.now().isoformat()
+                })
+                return code_content
             return fixed_code
         except Exception as e:
             logger.error(f"Failed to generate fix for issue: {e}")
+            self._flag_issue_for_manual_review(issue, f"LLM error: {str(e)}")
             return code_content  # Return original if fix generation fails
 
     async def _apply_fix_to_code(self, original_code: str, issue: Dict) -> str:
@@ -686,6 +777,8 @@ Return ONLY the fixed code, no explanations:
             
             task_dir = DEV_OUTPUT_DIR / f"plan_{safe_task_title}"
             file_path = task_dir / filename
+            
+            file_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Save the fixed code
             file_path.write_text(fixed_code, encoding="utf-8")

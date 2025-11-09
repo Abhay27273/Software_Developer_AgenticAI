@@ -64,10 +64,24 @@ class LLMClient:
                       temperature: Optional[float] = None,
                       callback: Optional[Callable[[str], None]] = None,
                       max_retries: int = 3,
-                      validate_json: bool = False) -> str:
+                      validate_json: bool = False,
+                      metadata: Optional[Dict[str, Any]] = None) -> str:
         """Single-shot async response for all agents."""
         full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
         model_to_use = model or self.default_model
+        call_meta = metadata or {}
+        prompt_chars = len(full_prompt)
+        logger.info(
+            "LLM request initiated",
+            extra={
+                "agent": call_meta.get("agent"),
+                "prompt_name": call_meta.get("prompt_name"),
+                "model": model_to_use,
+                "prompt_chars": prompt_chars,
+                "temperature": temperature,
+                "streaming": False
+            }
+        )
 
         for attempt in range(max_retries):
             try:
@@ -93,11 +107,25 @@ class LLMClient:
                     except json.JSONDecodeError as je:
                         raise LLMError(f"Invalid JSON: {je}")
 
+                response_chars = len(text)
+
                 if callback:
                     if asyncio.iscoroutinefunction(callback):
                         await callback("✅ LLM response received.")
                     else:
                         callback("✅ LLM response received.")
+                logger.info(
+                    "LLM request completed",
+                    extra={
+                        "agent": call_meta.get("agent"),
+                        "prompt_name": call_meta.get("prompt_name"),
+                        "model": model_to_use,
+                        "prompt_chars": prompt_chars,
+                        "response_chars": response_chars,
+                        "temperature": temperature,
+                        "streaming": False
+                    }
+                )
                 return text
 
             except Exception as e:
@@ -112,17 +140,44 @@ class LLMClient:
                     await asyncio.sleep(wait_time)
                 else:
                     # Use fallback only for non-streaming failures
-                    return self.get_fallback_response(user_prompt, expects_json=validate_json)
+                    fallback = self.get_fallback_response(user_prompt, expects_json=validate_json)
+                    logger.warning(
+                        "LLM request fell back after retries",
+                        extra={
+                            "agent": call_meta.get("agent"),
+                            "prompt_name": call_meta.get("prompt_name"),
+                            "model": model_to_use,
+                            "prompt_chars": prompt_chars,
+                            "response_chars": len(fallback),
+                            "temperature": temperature,
+                            "streaming": False
+                        }
+                    )
+                    return fallback
 
         # Should theoretically not be reached if max_retries is > 0 and handles failure
-        return self.get_fallback_response(user_prompt, expects_json=validate_json)
+        fallback = self.get_fallback_response(user_prompt, expects_json=validate_json)
+        logger.warning(
+            "LLM request hit unexpected fallback",
+            extra={
+                "agent": call_meta.get("agent"),
+                "prompt_name": call_meta.get("prompt_name"),
+                "model": model_to_use,
+                "prompt_chars": prompt_chars,
+                "response_chars": len(fallback),
+                "temperature": temperature,
+                "streaming": False
+            }
+        )
+        return fallback
 
     async def ask_llm_streaming(self, user_prompt: str,
                           system_prompt: Optional[str] = None,
                           model: Optional[str] = None,
                           temperature: Optional[float] = None,
                           callback: Optional[Callable[[str], None]] = None,
-                          max_retries: int = 3) -> AsyncGenerator[str, None]:
+                          max_retries: int = 3,
+                          metadata: Optional[Dict[str, Any]] = None) -> AsyncGenerator[str, None]:
         """Stream output from Gemini API with real-time callbacks.
 
         Notes:
@@ -132,9 +187,23 @@ class LLMClient:
         """
         full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
         model_to_use = model or self.default_model
+        call_meta = metadata or {}
+        prompt_chars = len(full_prompt)
+        logger.info(
+            "LLM streaming request initiated",
+            extra={
+                "agent": call_meta.get("agent"),
+                "prompt_name": call_meta.get("prompt_name"),
+                "model": model_to_use,
+                "prompt_chars": prompt_chars,
+                "temperature": temperature,
+                "streaming": True
+            }
+        )
 
         for attempt in range(max_retries):
             try:
+                total_response_chars = 0
                 model_instance = await self._get_model(model_to_use, temperature)
                 if callback:
                     if asyncio.iscoroutinefunction(callback):
@@ -173,6 +242,7 @@ class LLMClient:
                     except Exception:
                         logger.exception("Callback raised while handling stream chunk; continuing.")
 
+                    total_response_chars += len(text)
                     yield text
 
                 # stream completed successfully
@@ -181,6 +251,18 @@ class LLMClient:
                         await callback("\n✅ Streaming completed.")
                     else:
                         callback("\n✅ Streaming completed.")
+                logger.info(
+                    "LLM streaming request completed",
+                    extra={
+                        "agent": call_meta.get("agent"),
+                        "prompt_name": call_meta.get("prompt_name"),
+                        "model": model_to_use,
+                        "prompt_chars": prompt_chars,
+                        "response_chars": total_response_chars,
+                        "temperature": temperature,
+                        "streaming": True
+                    }
+                )
                 return  # successful completion
 
             except (GoogleAPICallError, ValueError) as e:
@@ -193,6 +275,18 @@ class LLMClient:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                 else:
+                    logger.warning(
+                        "LLM streaming request failed after retries",
+                        extra={
+                            "agent": call_meta.get("agent"),
+                            "prompt_name": call_meta.get("prompt_name"),
+                            "model": model_to_use,
+                            "prompt_chars": prompt_chars,
+                            "temperature": temperature,
+                            "streaming": True,
+                            "error": str(e)
+                        }
+                    )
                     raise LLMError(f"LLM streaming failed after {max_retries} attempts: {e}")
             except Exception as e:
                 logger.exception("Streaming attempt %d failed unexpectedly: %s", attempt + 1, e)

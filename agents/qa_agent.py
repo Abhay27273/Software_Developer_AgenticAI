@@ -16,7 +16,8 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from models.task import Task
 from models.enums import TaskStatus
 from parse.websocket_manager import WebSocketManager
-from utils.llm_setup import ask_llm_streaming, ask_llm, LLMError
+from utils.llm_setup import ask_llm, LLMError
+from utils.cache_manager import load_cached_content, save_cached_content
 from config import DEV_OUTPUT_DIR
 
 # Configure logging
@@ -660,6 +661,21 @@ class QAAgent:
 
     async def _generate_unit_tests(self, code_content: str, task: Task) -> str:
         """Generate unit tests using LLM."""
+        prompt_type = "qa_unit_tests"
+        cache_task_id = task.id or "unknown_task"
+        cached_tests = load_cached_content(cache_task_id, prompt_type, extension="py")
+
+        if cached_tests:
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "info",
+                "task_id": task.id,
+                "message": "QA Agent: Reusing cached test scaffold for this task.",
+                "timestamp": datetime.now().isoformat(),
+                "cache_hit": True
+            })
+            return cached_tests
+
         prompt = f"""
 You are a Senior QA Engineer. Generate comprehensive pytest unit tests for the following Python code.
 
@@ -684,7 +700,7 @@ Return ONLY the test code, no explanations:
             test_code = await ask_llm(
                 user_prompt=prompt,
                 system_prompt="You are a QA engineer generating pytest unit tests. Return only executable Python test code.",
-                model="gemini-2.5-pro",
+                model="gemini-2.5-flash",
                 temperature=0.3,
                 validate_json=False
             )
@@ -697,6 +713,16 @@ Return ONLY the test code, no explanations:
                     "timestamp": datetime.now().isoformat()
                 })
                 return ""
+            save_cached_content(
+                cache_task_id,
+                prompt_type,
+                test_code,
+                extension="py",
+                metadata={
+                    "agent": self.agent_id,
+                    "stored_at": datetime.now().isoformat()
+                }
+            )
             return test_code
         except Exception as e:
             logger.error(f"Failed to generate unit tests: {e}")
@@ -735,7 +761,7 @@ Return ONLY the fixed code, no explanations:
             fixed_code = await ask_llm(
                 user_prompt=prompt,
                 system_prompt="You are a software developer fixing code issues. Return only the corrected Python code.",
-                model="gemini-2.5-pro",
+                model="gemini-2.5-flash",
                 temperature=0.2,
                 validate_json=False
             )

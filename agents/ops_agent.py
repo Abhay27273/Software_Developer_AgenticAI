@@ -21,6 +21,7 @@ from models.task import Task
 from models.enums import TaskStatus
 from parse.websocket_manager import WebSocketManager
 from utils.llm_setup import ask_llm, LLMError
+from utils.cache_manager import load_cached_content, save_cached_content
 
 # Configure structured logging
 logging.basicConfig(
@@ -586,7 +587,7 @@ primary_region = "iad"
         await self._copy_source_code_with_structure(task)
         
         # Generate essential files
-        await self._generate_readme()
+        await self._generate_readme(task)
         await self._generate_gitignore()
         await self._generate_requirements()
         await self._generate_env_example()
@@ -675,10 +676,26 @@ primary_region = "iad"
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(file_path, target_path)
 
-    async def _generate_readme(self):
-        """Generate comprehensive README using LLM."""
+    async def _generate_readme(self, task: Task):
+        """Generate comprehensive README using LLM, reusing cached output when possible."""
         project_info = await self._analyze_project_type()
-        
+        prompt_type = "ops_readme"
+        cache_task_id = getattr(task, "id", None) or "ops_task"
+
+        cached_readme = load_cached_content(cache_task_id, prompt_type, extension="md")
+        if cached_readme:
+            await self._broadcast_ops_message(
+                "readme_cached",
+                "📄 Reusing cached README template for this operations task.",
+                {
+                    "stage": "repo_setup",
+                    "cache_hit": True,
+                    "task_id": getattr(task, "id", None)
+                }
+            )
+            (self.repo_path / "README.md").write_text(cached_readme)
+            return
+
         readme_prompt = f"""Generate a professional, comprehensive README.md for this AI-generated project:
 
 Project Type: {project_info['type']}
@@ -699,18 +716,32 @@ The README should include:
 
 Make it professional, clear, and user-friendly. Use proper markdown formatting.
 """
-        
+
+        source = "llm"
         try:
             readme_content = await ask_llm(
                 user_prompt=readme_prompt,
                 system_prompt="You are a technical writer creating professional README documentation.",
-                model="gemini-2.5-pro",
+                model="gemini-2.5-flash",
                 temperature=0.3
             )
-        except:
+        except Exception as err:
+            logger.warning("OpsAgent: README generation fell back to template: %s", err, exc_info=True)
             readme_content = self._generate_fallback_readme(project_info)
-        
+            source = "fallback"
+
         (self.repo_path / "README.md").write_text(readme_content)
+        save_cached_content(
+            cache_task_id,
+            prompt_type,
+            readme_content,
+            extension="md",
+            metadata={
+                "agent": "ops_agent",
+                "stored_at": datetime.now().isoformat(),
+                "source": source
+            }
+        )
 
     def _generate_fallback_readme(self, project_info: Dict) -> str:
         """Generate fallback README if LLM fails."""

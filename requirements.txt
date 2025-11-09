@@ -32,4 +32,7 @@ pydantic
 json5
 langgraph
 
+# Redis (Phase 2.2 - Distributed Queue)
+redis>=5.0.0
+
 # File System Monitoring

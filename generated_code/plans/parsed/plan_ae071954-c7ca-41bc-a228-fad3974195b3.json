@@ -1,0 +1,23 @@
+{
+  "id": "ae071954-c7ca-41bc-a228-fad3974195b3",
+  "title": "Classic Snake Game Development Plan",
+  "description": "A detailed plan to develop a classic Snake game, covering core game mechanics, user interaction, collision detection, score tracking, and game state management.",
+  "tasks": [
+    {
+      "id": "task_001",
+      "title": "Initialize Project Environment",
+      "description": "Set up the basic project structure, choose a programming language/framework (e.g., Python with Pygame, JavaScript with Canvas), and create initial files.",
+      "priority": 1,
+      "status": "completed",
+      "dependencies": [],
+      "estimated_hours": 1.0,
+      "complexity": "low",
+      "agent_type": "dev_agent",
+      "created_at": "2025-11-09T01:43:10.190913",
+      "metadata": {}
+    }
+  ],
+  "created_at": "2025-11-09T01:43:10.190671",
+  "total_estimated_hours": null,
+  "complexity_distribution": {}
+}

@@ -1,0 +1,18 @@
+*   **Backend**: Python 3.10+, FastAPI, Pydantic, Uvicorn, SQLAlchemy, Psycopg2
+*   **Frontend**: React 18+, JavaScript, Vite, Tailwind CSS
+*   **Database**: PostgreSQL
+*   **Containerization**: Docker, Docker Compose
+
+## Setup and Run Instructions
+
+### Prerequisites
+
+*   **Docker Desktop**: Ensure Docker and Docker Compose are installed and running.
+*   **Python 3.10+**: (Optional, for local backend development)
+*   **Node.js & npm/yarn**: (Optional, for local frontend development)
+
+### Configure Environment Variables
+
+Create `.env` files in the `backend/` and `frontend/` directories based on their respective `.env.example` templates.
+
+*   **`backend/.env`**:

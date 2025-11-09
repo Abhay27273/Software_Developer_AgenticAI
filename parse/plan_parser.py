@@ -3,10 +3,11 @@ import re
 import json5 # Used for more lenient JSON parsing
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from models.plan import Plan
 from models.task import Task
 from models.enums import TaskStatus
+from utils.toon_parser import TOONParser
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,63 @@ class PlanParser:
 
 
     @staticmethod
-    def clean_json_string(text: str) -> str:
+    def clean_and_parse(text: str) -> Dict[str, Any]:
         """
-        Clean and normalize LLM response to make it valid JSON.
+        Smart parser that handles both TOON and JSON formats.
+        Prioritizes TOON for token efficiency, falls back to JSON for compatibility.
+        
+        Args:
+            text: Raw LLM response (TOON or JSON format)
+        
+        Returns:
+            Parsed plan dictionary
+        """
+        text = text.strip()
+        original_text_preview = text[:500].replace('\n', '\\n') + ('...' if len(text) > 500 else '')
+        logger.debug(f"Attempting to parse plan. Original text start: {original_text_preview}")
+        
+        # Check if it's TOON format (most efficient)
+        if TOONParser.is_toon_format(text):
+            logger.info("🎯 Detected TOON format, parsing for token efficiency...")
+            try:
+                parsed = TOONParser.parse_toon_to_dict(text)
+                # Calculate token savings
+                import json as json_module
+                json_equivalent = json_module.dumps(parsed, ensure_ascii=False)
+                savings = TOONParser.estimate_token_savings(len(json_equivalent), len(text))
+                logger.info(f"💰 Token savings: ~{savings['saved_tokens_est']} tokens ({savings['savings_percent']}% reduction)")
+                return parsed
+            except Exception as e:
+                logger.warning(f"TOON parsing failed: {e}, falling back to JSON")
+        
+        # Check if it's JSON format
+        if TOONParser.is_json_format(text):
+            logger.info("📋 Detected JSON format, parsing with legacy parser...")
+            return PlanParser._parse_json_legacy(text)
+        
+        # Try to detect and extract format automatically
+        logger.warning("⚠️ Format unclear, attempting both parsers...")
+        
+        # Try TOON first (more efficient if it works)
+        try:
+            parsed = TOONParser.parse_toon_to_dict(text)
+            logger.info("✅ Successfully parsed as TOON")
+            return parsed
+        except Exception:
+            logger.debug("TOON parsing attempt failed, trying JSON")
+        
+        # Try JSON as fallback
+        try:
+            parsed = PlanParser._parse_json_legacy(text)
+            logger.info("✅ Successfully parsed as JSON")
+            return parsed
+        except Exception as e:
+            raise ValueError(f"Could not parse content as TOON or JSON: {e}")
+
+    @staticmethod
+    def _parse_json_legacy(text: str) -> Dict[str, Any]:
+        """
+        Legacy JSON parsing logic (kept for backward compatibility).
         This version is more aggressive in trying to isolate a single JSON object.
         """
         original_text_preview = text[:500].replace('\n', '\\n') + ('...' if len(text) > 500 else '')
@@ -94,20 +149,24 @@ class PlanParser:
             logger.error(f"Unexpected error during final parsing: {e}")
             raise e # Re-raise other exceptions
 
-        # Convert back to strict JSON format for consistent output, ensure_ascii=False for non-ASCII chars
-        final_json_str = json.dumps(parsed_data, ensure_ascii=False)
-        logger.debug(f"Final cleaned JSON: {final_json_str[:200].replace('\n', '\\n')}...")
-        return final_json_str
+        # Return parsed data directly (not as string)
+        logger.debug(f"Final cleaned JSON: {str(parsed_data)[:200].replace('\n', '\\n')}...")
+        return parsed_data
+    
+    @staticmethod
+    def clean_json_string(text: str) -> str:
+        """
+        DEPRECATED: Use clean_and_parse() instead.
+        Kept for backward compatibility.
+        """
+        result = PlanParser._parse_json_legacy(text)
+        return json.dumps(result, ensure_ascii=False)
 
     def parse_plan_file(self, file_path: Path) -> Optional[Plan]:
         """Read raw plan file and return structured Plan object."""
         try:
             raw_text = file_path.read_text(encoding="utf-8")
-            cleaned_json = self.clean_json_string(raw_text) # Use self.clean_json_string
-
-            # Already loaded by json5/json.loads in clean_json_string, so just parse it again from string
-            # This ensures consistent loading regardless of which parser succeeded in cleaning
-            plan_data = json.loads(cleaned_json) # Always load with strict json.loads after cleaning
+            plan_data = self.clean_and_parse(raw_text)  # Use new unified parser
 
             # Validate minimal fields
             if not all(k in plan_data for k in ['plan_title', 'plan_description', 'tasks']):
@@ -155,7 +214,7 @@ class PlanParser:
             return None
 
     def parse_all_raw_plans(self):
-        """Parse all *_raw.txt plans in the directory and save them as JSON."""
+        """Parse all *_raw.txt plans in the directory and save them as both TOON and JSON."""
         # Ensure RAW_PLAN_DIR exists (it should have been created in __init__)
         self.raw_plan_dir.mkdir(parents=True, exist_ok=True) # Redundant but safe check
         
@@ -163,12 +222,24 @@ class PlanParser:
             logger.info(f"Attempting to parse raw plan file: {file.name}")
             plan = self.parse_plan_file(file) # Use self.parse_plan_file
             if plan:
-                output_path = self.parsed_plan_dir / f"plan_{plan.id}.json" # Use self.parsed_plan_dir
+                plan_dict = plan.to_dict()
+                
+                # Save as TOON format for token efficiency
+                toon_output_path = self.parsed_plan_dir / f"plan_{plan.id}.toon"
                 try:
-                    with open(output_path, "w", encoding="utf-8") as f:
-                        json.dump(plan.to_dict(), f, indent=2, ensure_ascii=False)
-                    logger.info(f"✅ Parsed and saved: {output_path.name}")
+                    toon_content = TOONParser.serialize_plan_to_toon(plan_dict)
+                    toon_output_path.write_text(toon_content, encoding="utf-8")
+                    logger.info(f"✅ Parsed and saved as TOON: {toon_output_path.name}")
                 except Exception as e:
-                    logger.error(f"Failed to save parsed plan {output_path.name}: {e}")
+                    logger.error(f"Failed to save TOON plan {toon_output_path.name}: {e}")
+                
+                # Also save as JSON for backward compatibility
+                json_output_path = self.parsed_plan_dir / f"plan_{plan.id}.json"
+                try:
+                    with open(json_output_path, "w", encoding="utf-8") as f:
+                        json.dump(plan_dict, f, indent=2, ensure_ascii=False)
+                    logger.info(f"✅ Also saved as JSON: {json_output_path.name}")
+                except Exception as e:
+                    logger.error(f"Failed to save JSON plan {json_output_path.name}: {e}")
             else:
                 logger.warning(f"⚠️ Skipped invalid plan file: {file.name}")

@@ -1,0 +1,5 @@
+*   The **FastAPI Backend** will be accessible at `http://localhost:8000`.
+        *   FastAPI interactive documentation (Swagger UI) at `http://localhost:8000/docs`.
+    *   The **React Frontend** will be accessible at `http://localhost:5173`.
+
+3.  **Stop Services**:

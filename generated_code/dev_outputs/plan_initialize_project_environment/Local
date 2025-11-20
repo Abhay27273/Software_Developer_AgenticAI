@@ -1,6 +1,0 @@
-If you prefer to run services outside of Docker:
-
-#### Backend (FastAPI)
-
-1.  Navigate to `backend/`: `cd backend/`
-2.  Create and activate a Python virtual environment:

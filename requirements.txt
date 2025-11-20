@@ -36,3 +36,9 @@ langgraph
 redis>=5.0.0
 
 # File System Monitoring
+watchdog>=4.0.0
+
+# Database (Phase 2 - Production Enhancement)
+asyncpg>=0.29.0
+alembic>=1.13.0
+sqlalchemy>=2.0.0

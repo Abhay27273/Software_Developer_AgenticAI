@@ -1,0 +1,41 @@
+{
+  "id": "rest-api-fastapi",
+  "name": "REST API with FastAPI",
+  "description": "A production-ready REST API with FastAPI, JWT authentication, PostgreSQL database, and comprehensive tests",
+  "category": "api",
+  "files": {
+    "main.py": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom api.routes import router\nfrom database import engine, Base\n\napp = FastAPI(title=\"{{project_name}}\", version=\"1.0.0\")\n\n# CORS middleware\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"*\"],\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)\n\n# Create database tables\nBase.metadata.create_all(bind=engine)\n\n# Include routers\napp.include_router(router, prefix=\"/api/v1\")\n\n@app.get(\"/health\")\nasync def health_check():\n    return {\"status\": \"healthy\"}\n\nif __name__ == \"__main__\":\n    import uvicorn\n    uvicorn.run(app, host=\"0.0.0.0\", port=8000)\n",
+    "database.py": "from sqlalchemy import create_engine\nfrom sqlalchemy.ext.declarative import declarative_base\nfrom sqlalchemy.orm import sessionmaker\nimport os\n\nDATABASE_URL = os.getenv(\"DATABASE_URL\", \"postgresql://user:password@localhost/{{db_name}}\")\n\nengine = create_engine(DATABASE_URL)\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\nBase = declarative_base()\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n",
+    "models/user.py": "from sqlalchemy import Column, Integer, String, DateTime\nfrom sqlalchemy.sql import func\nfrom database import Base\n\nclass User(Base):\n    __tablename__ = \"users\"\n    \n    id = Column(Integer, primary_key=True, index=True)\n    email = Column(String, unique=True, index=True, nullable=False)\n    hashed_password = Column(String, nullable=False)\n    created_at = Column(DateTime(timezone=True), server_default=func.now())\n    updated_at = Column(DateTime(timezone=True), onupdate=func.now())\n",
+    "api/routes.py": "from fastapi import APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm import Session\nfrom database import get_db\nfrom models.user import User\nfrom schemas.user import UserCreate, UserResponse\n\nrouter = APIRouter()\n\n@router.post(\"/users\", response_model=UserResponse)\nasync def create_user(user: UserCreate, db: Session = Depends(get_db)):\n    # Check if user exists\n    existing_user = db.query(User).filter(User.email == user.email).first()\n    if existing_user:\n        raise HTTPException(status_code=400, detail=\"Email already registered\")\n    \n    # Create new user\n    db_user = User(email=user.email, hashed_password=user.password)  # Hash in production!\n    db.add(db_user)\n    db.commit()\n    db.refresh(db_user)\n    return db_user\n\n@router.get(\"/users/{user_id}\", response_model=UserResponse)\nasync def get_user(user_id: int, db: Session = Depends(get_db)):\n    user = db.query(User).filter(User.id == user_id).first()\n    if not user:\n        raise HTTPException(status_code=404, detail=\"User not found\")\n    return user\n",
+    "schemas/user.py": "from pydantic import BaseModel, EmailStr\nfrom datetime import datetime\n\nclass UserCreate(BaseModel):\n    email: EmailStr\n    password: str\n\nclass UserResponse(BaseModel):\n    id: int\n    email: str\n    created_at: datetime\n    \n    class Config:\n        from_attributes = True\n",
+    "requirements.txt": "fastapi==0.104.1\nuvicorn[standard]==0.24.0\nsqlalchemy==2.0.23\npsycopg2-binary==2.9.9\npydantic[email]==2.5.0\npython-jose[cryptography]==3.3.0\npasslib[bcrypt]==1.7.4\npython-multipart==0.0.6\npytest==7.4.3\nhttpx==0.25.2\n",
+    "README.md": "# {{project_name}}\n\n{{project_description}}\n\n## Features\n\n- FastAPI REST API\n- PostgreSQL database with SQLAlchemy ORM\n- JWT authentication\n- CORS enabled\n- Health check endpoint\n- Comprehensive tests\n\n## Setup\n\n1. Install dependencies:\n```bash\npip install -r requirements.txt\n```\n\n2. Set environment variables:\n```bash\nexport DATABASE_URL=postgresql://user:password@localhost/{{db_name}}\n```\n\n3. Run the application:\n```bash\npython main.py\n```\n\nThe API will be available at http://localhost:8000\n\n## API Documentation\n\nInteractive API docs available at:\n- Swagger UI: http://localhost:8000/docs\n- ReDoc: http://localhost:8000/redoc\n\n## Testing\n\nRun tests with:\n```bash\npytest\n```\n"
+  },
+  "required_vars": [
+    "project_name",
+    "db_name"
+  ],
+  "optional_vars": [
+    "project_description"
+  ],
+  "tech_stack": [
+    "FastAPI",
+    "PostgreSQL",
+    "SQLAlchemy",
+    "Pydantic",
+    "Pytest"
+  ],
+  "estimated_setup_time": 15,
+  "complexity": "medium",
+  "created_at": "2025-11-18T09:39:45.491471",
+  "updated_at": "2025-11-18T09:39:45.491477",
+  "author": "system",
+  "version": "1.0.0",
+  "tags": [
+    "api",
+    "rest",
+    "fastapi",
+    "postgresql"
+  ]
+}

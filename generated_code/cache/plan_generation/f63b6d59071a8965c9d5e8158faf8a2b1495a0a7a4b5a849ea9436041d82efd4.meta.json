@@ -1,6 +1,6 @@
 {
   "agent": "pm_agent",
-  "stored_at": "2025-11-08T17:43:40.344553",
-  "source": "strict_retry",
-  "validated": true
+  "stored_at": "2025-11-10T10:48:46.150996",
+  "validated": true,
+  "format": "TOON"
 }

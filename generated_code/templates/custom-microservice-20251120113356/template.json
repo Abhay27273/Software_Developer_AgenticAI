@@ -1,0 +1,24 @@
+{
+  "id": "custom-microservice-20251120113356",
+  "name": "Custom Microservice",
+  "description": "A custom microservice template",
+  "category": "microservice",
+  "files": {
+    "main.py": "# {{project_name}}\nprint('Hello')",
+    "config.py": "SERVICE_NAME = '{{project_name}}'"
+  },
+  "required_vars": [
+    "project_name"
+  ],
+  "optional_vars": [],
+  "tech_stack": [
+    "Python"
+  ],
+  "estimated_setup_time": 30,
+  "complexity": "simple",
+  "created_at": "2025-11-20T06:03:56.846638",
+  "updated_at": "2025-11-20T06:03:56.846643",
+  "author": "system",
+  "version": "1.0.0",
+  "tags": []
+}

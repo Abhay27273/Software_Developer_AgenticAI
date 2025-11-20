@@ -1,0 +1,36 @@
+{
+  "id": "34410317-c31e-4890-8131-23fa53d96b1c",
+  "name": "AI Agent Self-Study with Gemini & RAG",
+  "type": "api",
+  "status": "in_progress",
+  "owner_id": "default_user",
+  "created_at": "2025-11-19T09:59:32.304452",
+  "updated_at": "2025-11-19T10:31:00.191008",
+  "last_deployed_at": null,
+  "codebase": {},
+  "dependencies": [],
+  "modifications": [
+    {
+      "id": "34410317-c31e-4890-8131-23fa53d96b1c_init",
+      "timestamp": "2025-11-19T10:31:00.187471",
+      "description": "Initial project creation: AI Agent Self-Study with Gemini & RAG",
+      "affected_files": [],
+      "requested_by": "default_user",
+      "status": "applied"
+    }
+  ],
+  "deployments": [],
+  "environment_vars": {},
+  "deployment_config": {
+    "platform": "render",
+    "environment": "production",
+    "auto_deploy": false,
+    "health_check_enabled": true,
+    "monitoring_enabled": false
+  },
+  "test_coverage": 0.0,
+  "security_score": 0.0,
+  "performance_score": 0.0,
+  "description": "Develop a self-study AI agent leveraging Gemini API, LangChain/LangGraph, and RAG with ChromaDB for knowledge retrieval.",
+  "repository_url": null
+}

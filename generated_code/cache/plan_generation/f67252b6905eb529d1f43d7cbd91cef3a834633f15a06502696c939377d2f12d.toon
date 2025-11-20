@@ -1,0 +1,6 @@
+PLAN<ai_dev_agent>|Agentic AI Dev Platform|Develop a platform leveraging AI agents to automate software development tasks.
+TASK<001>|Setup Core Agent Framework|Establish foundational framework for AI agents and task execution|1|[]|6.0|medium|dev_agent
+TASK<002>|Implement Code Generation Agent|Develop an AI agent capable of generating code snippets from specs|2|[001]|8.0|complex|dev_agent
+TASK<003>|Create Test Generation Agent|Build an AI agent to generate unit and integration tests for code|3|[002]|7.0|medium|qa_agent
+TASK<004>|Develop Deployment Automation Agent|Design an AI agent to handle automated deployment procedures|4|[001,002]|7.5|complex|ops_agent
+TASK<005>|User Interface for Agent Interaction|Create a simple web interface for users to define tasks and monitor progress|5|[001]|6.5|medium|dev_agent

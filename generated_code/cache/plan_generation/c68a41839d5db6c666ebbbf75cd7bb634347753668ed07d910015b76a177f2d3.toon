@@ -1,0 +1,6 @@
+PLAN<mariojump01>|Mario Jump Game MVP|Develop a basic 2D platformer inspired by Super Mario Bros.
+TASK<001>|Game Engine Setup|Initialize game window, main game loop, and basic asset loading system.|1|[]|3.0|simple|dev_agent
+TASK<002>|Player Character Implementation|Implement Mario sprite, movement (run, jump), and basic physics interactions.|2|[001]|6.0|medium|dev_agent
+TASK<003>|Basic Level Design & Collisions|Create initial level layout with platforms and implement player-environment collision detection.|3|[002]|5.0|medium|dev_agent
+TASK<004>|Player Movement & Collision QA|Thoroughly test player controls, jumping mechanics, and collision with level elements for bugs.|4|[003]|4.0|medium|qa_agent
+TASK<005>|Basic Enemy & Game Over Logic|Implement a simple enemy (e.g., Goomba) with movement and player interaction, add game over condition.|5|[003]|7.0|complex|dev_agent

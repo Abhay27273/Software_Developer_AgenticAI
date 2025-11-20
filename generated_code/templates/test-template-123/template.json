@@ -1,0 +1,19 @@
+{
+  "id": "test-template-123",
+  "name": "Test Template With ID",
+  "description": "A test template with explicit ID",
+  "category": "test",
+  "files": {
+    "test.py": "pass"
+  },
+  "required_vars": [],
+  "optional_vars": [],
+  "tech_stack": [],
+  "estimated_setup_time": 30,
+  "complexity": "medium",
+  "created_at": "2025-11-20T06:08:13.595116",
+  "updated_at": "2025-11-20T06:08:13.595118",
+  "author": "system",
+  "version": "1.0.0",
+  "tags": []
+}

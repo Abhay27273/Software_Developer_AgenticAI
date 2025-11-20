@@ -1,0 +1,36 @@
+{
+  "id": "134443a1-ca4a-4479-b1fb-87e6180c1836",
+  "name": "Snake Game MVP",
+  "type": "other",
+  "status": "in_progress",
+  "owner_id": "default_user",
+  "created_at": "2025-11-18T10:00:14.921625",
+  "updated_at": "2025-11-18T10:08:36.503305",
+  "last_deployed_at": null,
+  "codebase": {},
+  "dependencies": [],
+  "modifications": [
+    {
+      "id": "134443a1-ca4a-4479-b1fb-87e6180c1836_init",
+      "timestamp": "2025-11-18T10:08:36.502991",
+      "description": "Initial project creation: Snake Game MVP",
+      "affected_files": [],
+      "requested_by": "default_user",
+      "status": "applied"
+    }
+  ],
+  "deployments": [],
+  "environment_vars": {},
+  "deployment_config": {
+    "platform": "render",
+    "environment": "production",
+    "auto_deploy": false,
+    "health_check_enabled": true,
+    "monitoring_enabled": false
+  },
+  "test_coverage": 0.0,
+  "security_score": 0.0,
+  "performance_score": 0.0,
+  "description": "Develop a basic playable classic Snake game",
+  "repository_url": null
+}

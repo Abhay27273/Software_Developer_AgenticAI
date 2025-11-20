@@ -1,0 +1,6 @@
+PLAN<ytclone001>|Youtube Clone MVP|Minimum Viable Product for a video sharing platform
+TASK<001>|Initialize Backend & Database|Set up server framework, configure database, and define initial schemas for users and videos.|1|[]|4.0|medium|dev_agent
+TASK<002>|Implement User Authentication|Develop user registration, login, session management, and authentication endpoints.|2|[001]|6.0|medium|dev_agent
+TASK<003>|Develop Video Upload Feature|Implement endpoints for users to upload video files, handle storage, and basic metadata saving.|2|[001,002]|7.0|complex|dev_agent
+TASK<004>|Create Video Playback & Listing|Implement endpoints to retrieve video metadata and stream content. Develop basic frontend to list and play videos.|3|[003]|6.0|medium|dev_agent
+TASK<005>|Write API Integration Tests|Develop integration tests for user authentication, video upload, and video playback APIs.|4|[002,003,004]|5.0|medium|qa_agent

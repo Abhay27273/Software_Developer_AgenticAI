@@ -7,10 +7,11 @@ import os
 import json
 import logging
 import asyncio
+import time
 from typing import Optional, Callable, Dict, Any, AsyncGenerator
 from dotenv import load_dotenv
 import google.generativeai as genai
-from asyncio import Lock
+from asyncio import Lock, Semaphore
 from google.api_core.exceptions import GoogleAPICallError
 
 # Load .env variables
@@ -25,7 +26,7 @@ class LLMError(Exception):
     pass
 
 class LLMClient:
-    """Manages Gemini LLM async usage across all agents."""
+    """Manages Gemini LLM async usage across all agents with rate limiting."""
 
     def __init__(self):
         """Initializes the client and its own instance-specific model cache."""
@@ -46,7 +47,14 @@ class LLMClient:
         self._model_cache: Dict[str, Any] = {}
         self._model_lock = Lock()
         
+        # Rate limiting to prevent "too_many_pings" errors
+        self._request_semaphore = Semaphore(1)  # Max 1 concurrent request (reduced for API stability)
+        self._min_request_interval = 5.0  # 5 seconds between requests (increased for API stability)
+        self._last_request_time = 0.0
+        self._rate_limit_lock = Lock()
+        
         logger.info(f"✅ LLMClient initialized with default model: {self.default_model}")
+        logger.info(f"🚦 Rate limiting: Max 1 concurrent request, 5.0s interval")
 
     async def _get_model(self, model_name: str, temperature: Optional[float] = None):
         """Load/reuse model instance from the client's private cache."""
@@ -178,12 +186,13 @@ class LLMClient:
                           callback: Optional[Callable[[str], None]] = None,
                           max_retries: int = 3,
                           metadata: Optional[Dict[str, Any]] = None) -> AsyncGenerator[str, None]:
-        """Stream output from Gemini API with real-time callbacks.
+        """Stream output from Gemini API with real-time callbacks and rate limiting.
 
         Notes:
         - This implementation is defensive: chunk.text can raise ValueError if the response part is missing.
           We skip such chunks and continue streaming instead of crashing the whole generator.
         - The function supports sync and async callbacks.
+        - Rate limiting prevents "too_many_pings" errors from Gemini API.
         """
         full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
         model_to_use = model or self.default_model
@@ -201,104 +210,125 @@ class LLMClient:
             }
         )
 
-        for attempt in range(max_retries):
-            try:
-                total_response_chars = 0
-                model_instance = await self._get_model(model_to_use, temperature)
-                if callback:
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(f"🌊 Starting stream from {model_to_use}...")
-                    else:
-                        callback(f"🌊 Starting stream from {model_to_use}...")
+        # Apply rate limiting
+        async with self._request_semaphore:
+            async with self._rate_limit_lock:
+                now = time.time()
+                elapsed = now - self._last_request_time
+                if elapsed < self._min_request_interval:
+                    wait_time = self._min_request_interval - elapsed
+                    logger.debug(f"🚦 Rate limit: waiting {wait_time:.2f}s before request")
+                    await asyncio.sleep(wait_time)
+                self._last_request_time = time.time()
 
-                # request streaming response
-                stream = await model_instance.generate_content_async(full_prompt, stream=True)
+            for attempt in range(max_retries):
+                try:
+                    total_response_chars = 0
+                    model_instance = await self._get_model(model_to_use, temperature)
+                    if callback:
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(f"🌊 Starting stream from {model_to_use}...")
+                        else:
+                            callback(f"🌊 Starting stream from {model_to_use}...")
 
-                async for chunk in stream:
-                    # Defensive access: chunk.text may raise ValueError if no valid Part is present.
-                    try:
-                        text = getattr(chunk, "text", None)
-                        if text is None:
-                            # attempt to access other fallback fields (best-effort)
-                            text = getattr(chunk, "candidate", None)
+                    # request streaming response
+                    stream = await model_instance.generate_content_async(full_prompt, stream=True)
+
+                    async for chunk in stream:
+                        # Defensive access: chunk.text may raise ValueError if no valid Part is present.
+                        try:
+                            text = getattr(chunk, "text", None)
                             if text is None:
-                                # No usable text in this chunk; skip it.
-                                continue
-                    except ValueError as ve:
-                        # Known gemini SDK behavior: skip invalid/empty chunk
-                        logger.warning("LLM streaming returned a chunk without a valid text Part: %s", ve)
-                        continue
-                    except Exception as e:
-                        logger.exception("Unexpected error accessing chunk.text: %s", e)
-                        continue
+                                # attempt to access other fallback fields (best-effort)
+                                text = getattr(chunk, "candidate", None)
+                                if text is None:
+                                    # No usable text in this chunk; skip it.
+                                    continue
+                        except ValueError as ve:
+                            # Known gemini SDK behavior: skip invalid/empty chunk
+                            logger.warning("LLM streaming returned a chunk without a valid text Part: %s", ve)
+                            continue
+                        except Exception as e:
+                            logger.exception("Unexpected error accessing chunk.text: %s", e)
+                            continue
 
-                    # deliver chunk to caller via callback and generator
-                    try:
-                        if callback:
-                            if asyncio.iscoroutinefunction(callback):
-                                await callback(text)
-                            else:
-                                callback(text)
-                    except Exception:
-                        logger.exception("Callback raised while handling stream chunk; continuing.")
+                        # deliver chunk to caller via callback and generator
+                        try:
+                            if callback:
+                                if asyncio.iscoroutinefunction(callback):
+                                    await callback(text)
+                                else:
+                                    callback(text)
+                        except Exception:
+                            logger.exception("Callback raised while handling stream chunk; continuing.")
 
-                    total_response_chars += len(text)
-                    yield text
+                        total_response_chars += len(text)
+                        yield text
 
-                # stream completed successfully
-                if callback:
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback("\n✅ Streaming completed.")
-                    else:
-                        callback("\n✅ Streaming completed.")
-                logger.info(
-                    "LLM streaming request completed",
-                    extra={
-                        "agent": call_meta.get("agent"),
-                        "prompt_name": call_meta.get("prompt_name"),
-                        "model": model_to_use,
-                        "prompt_chars": prompt_chars,
-                        "response_chars": total_response_chars,
-                        "temperature": temperature,
-                        "streaming": True
-                    }
-                )
-                return  # successful completion
-
-            except (GoogleAPICallError, ValueError) as e:
-                logger.exception("Streaming attempt %d failed with API/ValueError: %s", attempt + 1, e)
-                if callback:
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
-                    else:
-                        callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
-                else:
-                    logger.warning(
-                        "LLM streaming request failed after retries",
+                    # stream completed successfully
+                    if callback:
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback("\n✅ Streaming completed.")
+                        else:
+                            callback("\n✅ Streaming completed.")
+                    logger.info(
+                        "LLM streaming request completed",
                         extra={
                             "agent": call_meta.get("agent"),
                             "prompt_name": call_meta.get("prompt_name"),
                             "model": model_to_use,
                             "prompt_chars": prompt_chars,
+                            "response_chars": total_response_chars,
                             "temperature": temperature,
-                            "streaming": True,
-                            "error": str(e)
+                            "streaming": True
                         }
                     )
-                    raise LLMError(f"LLM streaming failed after {max_retries} attempts: {e}")
-            except Exception as e:
-                logger.exception("Streaming attempt %d failed unexpectedly: %s", attempt + 1, e)
-                if callback:
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
+                    return  # successful completion
+
+                except (GoogleAPICallError, ValueError) as e:
+                    error_str = str(e)
+                    is_503_error = "503" in error_str or "Connection reset" in error_str or "IOCP" in error_str
+                    backoff_time = (2 ** attempt) * (3 if is_503_error else 1)  # 3x backoff for 503 errors
+                    
+                    logger.exception("Streaming attempt %d failed with API/ValueError: %s", attempt + 1, e)
+                    if callback:
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
+                        else:
+                            callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        logger.warning(f"🔄 Retrying in {backoff_time}s (attempt {attempt + 2}/{max_retries})...")
+                        await asyncio.sleep(backoff_time)
                     else:
-                        callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
-                else:
-                    raise LLMError(f"LLM streaming failed after {max_retries} attempts: {e}")
+                        logger.warning(
+                            "LLM streaming request failed after retries",
+                            extra={
+                                "agent": call_meta.get("agent"),
+                                "prompt_name": call_meta.get("prompt_name"),
+                                "model": model_to_use,
+                                "prompt_chars": prompt_chars,
+                                "temperature": temperature,
+                                "streaming": True,
+                                "error": str(e)
+                            }
+                        )
+                        raise LLMError(f"LLM streaming failed after {max_retries} attempts: {e}")
+                except Exception as e:
+                    error_str = str(e)
+                    is_503_error = "503" in error_str or "Connection reset" in error_str or "IOCP" in error_str
+                    backoff_time = (2 ** attempt) * (3 if is_503_error else 1)  # 3x backoff for 503 errors
+                    
+                    logger.exception("Streaming attempt %d failed unexpectedly: %s", attempt + 1, e)
+                    if callback:
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
+                        else:
+                            callback(f"\n❌ Streaming attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        logger.warning(f"🔄 Retrying in {backoff_time}s (attempt {attempt + 2}/{max_retries})...")
+                        await asyncio.sleep(backoff_time)
+                    else:
+                        raise LLMError(f"LLM streaming failed after {max_retries} attempts: {e}")
 
     def get_fallback_response(self, prompt: str, expects_json: bool = False) -> str:
         """Fallback response in case LLM fails to generate content for non-streaming calls."""

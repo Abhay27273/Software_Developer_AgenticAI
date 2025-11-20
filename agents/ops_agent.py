@@ -214,9 +214,19 @@ primary_region = "iad"
         self.repo_path = self.generated_code_root / "repo"
         self.repo_path.mkdir(parents=True, exist_ok=True)
         
+        # Load API keys from environment/config
+        import config
+        github_token = config.GITHUB_TOKEN
+        github_username = config.GITHUB_USERNAME
+        render_api_key = config.RENDER_API_KEY
+        
         # GitHub configuration
-        self.github_config = GitHubConfig()
+        self.github_config = GitHubConfig(
+            token=github_token if github_token else None,
+            username=github_username if github_username else None
+        )
         self.github_repo_created = False
+        self.render_api_key = render_api_key if render_api_key else None
         
         # Detected API keys
         self.detected_api_keys: List[APIKeyRequirement] = []
@@ -227,6 +237,9 @@ primary_region = "iad"
         self.selected_platform: Optional[str] = None
         self.deployment_url: Optional[str] = None
         self.metrics = None
+        
+        # Docker availability
+        self._docker_available = False
         
         logger.info(f"🚀 Enhanced OpsAgent initialized")
         logger.info(f"   Deployment ID: {self.deployment_id}")
@@ -254,6 +267,29 @@ primary_region = "iad"
         """
         start_time = datetime.now()
         task.status = TaskStatus.IN_PROGRESS
+        
+        # Override GitHub token and Render API key from task metadata if provided
+        github_token = task.metadata.get("github_token") if task.metadata else None
+        render_api_key = task.metadata.get("render_api_key") if task.metadata else None
+        
+        if github_token:
+            logger.info("✅ Using GitHub token provided by user")
+            self.github_config.token = github_token
+            # Extract username from token if not already set
+            if not self.github_config.username:
+                try:
+                    import requests
+                    headers = {"Authorization": f"token {github_token}"}
+                    response = requests.get("https://api.github.com/user", headers=headers)
+                    if response.status_code == 200:
+                        self.github_config.username = response.json().get("login")
+                        logger.info(f"✅ Retrieved GitHub username: {self.github_config.username}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not retrieve GitHub username: {e}")
+        
+        if render_api_key:
+            logger.info("✅ Using Render API key provided by user")
+            self.render_api_key = render_api_key
         
         await self._broadcast_ops_message(
             "deployment_started",
@@ -286,10 +322,20 @@ primary_region = "iad"
             # Phase 6: Generate Deployment Configurations
             await self._generate_all_deployment_configs()
             
-            # Phase 7: Build Docker Image
-            image_info = await self._build_and_push_docker_image()
+            # Phase 7: Check Docker availability
+            self._docker_available = self._check_docker_available()
             
-            # Phase 8: Deploy to Platform(s)
+            if not self._docker_available:
+                logger.warning("⚠️ Docker not available - skipping container build")
+                await self._broadcast_ops_message(
+                    "docker_build_skipped",
+                    "⚠️ Docker not available - deployment prepared without container",
+                    {"stage": "docker_build", "status": "skipped"}
+                )
+            else:
+                image_info = await self._build_and_push_docker_image()
+            
+            # Phase 8: Deploy to Platform(s) (returns standardized dict structure)
             deployment_results = await self._deploy_to_platforms(recommended_platforms)
             
             # Phase 9: Setup Monitoring
@@ -300,6 +346,18 @@ primary_region = "iad"
             dashboard_data = await self._generate_deployment_dashboard(
                 build_time, github_url, deployment_results, monitoring_url
             )
+            
+            # Store GitHub URL and deployment URLs in task metadata
+            if not task.metadata:
+                task.metadata = {}
+            task.metadata["github_url"] = github_url
+            task.metadata["deployment_urls"] = []
+            
+            # Extract deployment URLs from results
+            if deployment_results.get("platforms"):
+                for platform_result in deployment_results["platforms"]:
+                    if platform_result.get("url"):
+                        task.metadata["deployment_urls"].append(platform_result["url"])
             
             task.status = TaskStatus.COMPLETED
             task.result = self._format_completion_message(dashboard_data)
@@ -593,6 +651,7 @@ primary_region = "iad"
         await self._generate_env_example()
         await self._generate_contributing_guide()
         await self._generate_license()
+        await self._generate_manual_deployment_script()
         
         await self._broadcast_ops_message(
             "repo_prepared",
@@ -693,7 +752,7 @@ primary_region = "iad"
                     "task_id": getattr(task, "id", None)
                 }
             )
-            (self.repo_path / "README.md").write_text(cached_readme)
+            (self.repo_path / "README.md").write_text(cached_readme, encoding='utf-8')
             return
 
         readme_prompt = f"""Generate a professional, comprehensive README.md for this AI-generated project:
@@ -730,7 +789,7 @@ Make it professional, clear, and user-friendly. Use proper markdown formatting.
             readme_content = self._generate_fallback_readme(project_info)
             source = "fallback"
 
-        (self.repo_path / "README.md").write_text(readme_content)
+        (self.repo_path / "README.md").write_text(readme_content, encoding='utf-8')
         save_cached_content(
             cache_task_id,
             prompt_type,
@@ -889,7 +948,7 @@ htmlcov/
 *.seed
 *.pid.lock
 """
-        (self.repo_path / ".gitignore").write_text(gitignore_content)
+        (self.repo_path / ".gitignore").write_text(gitignore_content, encoding='utf-8')
 
     async def _generate_requirements(self):
         """Generate requirements.txt with version pinning."""
@@ -904,7 +963,7 @@ htmlcov/
             # In production, query PyPI for latest versions
             requirements_content = "\n".join(sorted(third_party))
         
-        (self.repo_path / "requirements.txt").write_text(requirements_content)
+        (self.repo_path / "requirements.txt").write_text(requirements_content, encoding='utf-8')
 
     async def _analyze_dependencies(self) -> Dict[str, Set[str]]:
         """Analyze code dependencies."""
@@ -969,7 +1028,7 @@ htmlcov/
         else:
             env_content += "# No environment variables required\n"
         
-        (self.repo_path / ".env.example").write_text(env_content)
+        (self.repo_path / ".env.example").write_text(env_content, encoding='utf-8')
 
     async def _generate_contributing_guide(self):
         """Generate CONTRIBUTING.md."""
@@ -998,7 +1057,7 @@ htmlcov/
 
 Thank you for contributing! 🎉
 """
-        (self.repo_path / "CONTRIBUTING.md").write_text(contributing)
+        (self.repo_path / "CONTRIBUTING.md").write_text(contributing, encoding='utf-8')
 
     async def _generate_license(self):
         """Generate MIT LICENSE."""
@@ -1024,7 +1083,353 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-        (self.repo_path / "LICENSE").write_text(license_text)
+        (self.repo_path / "LICENSE").write_text(license_text, encoding='utf-8')
+
+    async def _generate_manual_deployment_script(self):
+        """Generate manual deployment script for when Docker is not available."""
+        script_content = '''#!/usr/bin/env python3
+"""
+Manual Deployment Script
+========================
+This script helps you deploy your application without Docker.
+
+Usage:
+    python deploy_manual.py --platform [local|heroku|render|railway]
+    
+Options:
+    --platform      Deployment platform (default: local)
+    --port         Port for local deployment (default: 8000)
+    --help         Show this help message
+"""
+
+import argparse
+import subprocess
+import sys
+import os
+from pathlib import Path
+
+class ManualDeployer:
+    def __init__(self, platform="local", port=8000):
+        self.platform = platform
+        self.port = port
+        self.repo_root = Path(__file__).parent
+        
+    def check_python_version(self):
+        """Check if Python version is compatible."""
+        if sys.version_info < (3, 8):
+            print("❌ Python 3.8+ required")
+            sys.exit(1)
+        print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor} detected")
+    
+    def install_dependencies(self):
+        """Install Python dependencies."""
+        print("\\n📦 Installing dependencies...")
+        requirements_file = self.repo_root / "requirements.txt"
+        
+        if not requirements_file.exists():
+            print("⚠️  No requirements.txt found - skipping dependency installation")
+            return
+        
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
+                check=True,
+                cwd=self.repo_root
+            )
+            print("✅ Dependencies installed successfully")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to install dependencies: {e}")
+            sys.exit(1)
+    
+    def setup_environment(self):
+        """Setup environment variables."""
+        print("\\n🔧 Setting up environment...")
+        env_example = self.repo_root / ".env.example"
+        env_file = self.repo_root / ".env"
+        
+        if env_example.exists() and not env_file.exists():
+            print("⚠️  .env file not found. Please copy .env.example to .env and configure:")
+            print(f"   cp {env_example} {env_file}")
+            print("   Then edit .env with your configuration")
+            
+            response = input("\\nContinue without .env? (y/N): ")
+            if response.lower() != 'y':
+                sys.exit(0)
+        
+        if env_file.exists():
+            print("✅ .env file found")
+    
+    def deploy_local(self):
+        """Deploy application locally."""
+        print(f"\\n🚀 Starting local deployment on port {self.port}...")
+        print(f"   Access at: http://localhost:{self.port}")
+        print("   Press Ctrl+C to stop\\n")
+        
+        # Try to find main application file
+        main_files = ["main.py", "app.py", "src/main.py", "src/app.py"]
+        main_file = None
+        
+        for file in main_files:
+            if (self.repo_root / file).exists():
+                main_file = file
+                break
+        
+        if not main_file:
+            print("❌ Could not find main application file (main.py, app.py, etc.)")
+            print("   Please run manually: python <your_main_file.py>")
+            sys.exit(1)
+        
+        try:
+            # Check if it's a FastAPI/Uvicorn app
+            with open(self.repo_root / main_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if 'FastAPI' in content or 'uvicorn' in content:
+                    # Run with uvicorn
+                    module_path = main_file.replace('/', '.').replace('.py', '')
+                    subprocess.run(
+                        [sys.executable, "-m", "uvicorn", f"{module_path}:app", 
+                         "--host", "0.0.0.0", "--port", str(self.port), "--reload"],
+                        cwd=self.repo_root
+                    )
+                elif 'Flask' in content:
+                    # Run with Flask
+                    env = os.environ.copy()
+                    env["FLASK_APP"] = main_file
+                    env["FLASK_ENV"] = "development"
+                    subprocess.run(
+                        [sys.executable, "-m", "flask", "run", 
+                         "--host", "0.0.0.0", "--port", str(self.port)],
+                        cwd=self.repo_root,
+                        env=env
+                    )
+                else:
+                    # Run as regular Python script
+                    subprocess.run([sys.executable, main_file], cwd=self.repo_root)
+        except KeyboardInterrupt:
+            print("\\n\\n✅ Application stopped")
+        except Exception as e:
+            print(f"❌ Deployment failed: {e}")
+            sys.exit(1)
+    
+    def deploy_heroku(self):
+        """Deploy to Heroku."""
+        print("\\n🚀 Deploying to Heroku...")
+        
+        # Check if Heroku CLI is installed
+        try:
+            subprocess.run(["heroku", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("❌ Heroku CLI not found. Install from: https://devcenter.heroku.com/articles/heroku-cli")
+            sys.exit(1)
+        
+        print("✅ Heroku CLI detected")
+        
+        # Check if Procfile exists
+        if not (self.repo_root / "Procfile").exists():
+            print("⚠️  Creating Procfile...")
+            (self.repo_root / "Procfile").write_text("web: uvicorn main:app --host 0.0.0.0 --port $PORT\\n", encoding='utf-8')
+        
+        # Initialize git if needed
+        if not (self.repo_root / ".git").exists():
+            print("📦 Initializing git repository...")
+            subprocess.run(["git", "init"], cwd=self.repo_root)
+            subprocess.run(["git", "add", "."], cwd=self.repo_root)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=self.repo_root)
+        
+        # Create Heroku app
+        app_name = input("Enter Heroku app name (or press Enter for auto-generated): ").strip()
+        create_cmd = ["heroku", "create"]
+        if app_name:
+            create_cmd.append(app_name)
+        
+        try:
+            subprocess.run(create_cmd, cwd=self.repo_root, check=True)
+            print("✅ Heroku app created")
+        except subprocess.CalledProcessError:
+            print("⚠️  App might already exist or creation failed")
+        
+        # Deploy
+        print("📤 Pushing to Heroku...")
+        try:
+            subprocess.run(["git", "push", "heroku", "main"], cwd=self.repo_root, check=True)
+            print("✅ Deployed to Heroku successfully!")
+            subprocess.run(["heroku", "open"], cwd=self.repo_root)
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Deployment failed: {e}")
+            sys.exit(1)
+    
+    def deploy_render(self):
+        """Instructions for Render deployment."""
+        print("\\n🚀 Render Deployment Instructions:")
+        print("\\n1. Push your code to GitHub/GitLab")
+        print("2. Go to https://render.com and create a new Web Service")
+        print("3. Connect your repository")
+        print("4. Configure:")
+        print("   - Build Command: pip install -r requirements.txt")
+        print("   - Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT")
+        print("5. Add environment variables from .env.example")
+        print("6. Click 'Create Web Service'")
+        print("\\n✅ Your app will be live at: https://<your-app>.onrender.com")
+    
+    def deploy_railway(self):
+        """Instructions for Railway deployment."""
+        print("\\n🚀 Railway Deployment Instructions:")
+        print("\\n1. Push your code to GitHub")
+        print("2. Go to https://railway.app and create a new project")
+        print("3. Select 'Deploy from GitHub repo'")
+        print("4. Railway will auto-detect Python and deploy")
+        print("5. Add environment variables from .env.example in the Variables tab")
+        print("6. Your app will be automatically deployed")
+        print("\\n✅ Access your deployment in the Railway dashboard")
+    
+    def deploy(self):
+        """Execute deployment based on platform."""
+        print("=" * 60)
+        print(f"🚀 Manual Deployment Script - {self.platform.upper()} Platform")
+        print("=" * 60)
+        
+        self.check_python_version()
+        self.install_dependencies()
+        self.setup_environment()
+        
+        if self.platform == "local":
+            self.deploy_local()
+        elif self.platform == "heroku":
+            self.deploy_heroku()
+        elif self.platform == "render":
+            self.deploy_render()
+        elif self.platform == "railway":
+            self.deploy_railway()
+        else:
+            print(f"❌ Unknown platform: {self.platform}")
+            print("   Supported: local, heroku, render, railway")
+            sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Manual deployment script for applications without Docker"
+    )
+    parser.add_argument(
+        "--platform",
+        default="local",
+        choices=["local", "heroku", "render", "railway"],
+        help="Deployment platform (default: local)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for local deployment (default: 8000)"
+    )
+    
+    args = parser.parse_args()
+    
+    deployer = ManualDeployer(platform=args.platform, port=args.port)
+    deployer.deploy()
+
+if __name__ == "__main__":
+    main()
+'''
+        
+        script_path = self.repo_path / "deploy_manual.py"
+        script_path.write_text(script_content, encoding='utf-8')
+        
+        # Make script executable on Unix systems
+        try:
+            import stat
+            script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
+        except Exception:
+            pass  # Windows doesn't need this
+        
+        logger.info(f"📜 Manual deployment script created: {script_path}")
+        
+        # Also create a deployment README
+        deploy_readme = '''# Deployment Guide
+
+## Quick Start
+
+### Local Deployment (No Docker Required)
+
+```bash
+python deploy_manual.py --platform local --port 8000
+```
+
+Visit: http://localhost:8000
+
+### Cloud Deployment Options
+
+#### 1. Heroku
+```bash
+python deploy_manual.py --platform heroku
+```
+
+#### 2. Render
+```bash
+python deploy_manual.py --platform render
+# Follow the instructions printed
+```
+
+#### 3. Railway
+```bash
+python deploy_manual.py --platform railway
+# Follow the instructions printed
+```
+
+## Docker Deployment (If Docker is Available)
+
+```bash
+# Build image
+docker build -t myapp .
+
+# Run container
+docker run -p 8000:8000 --env-file .env myapp
+```
+
+Or use docker-compose:
+```bash
+docker-compose up
+```
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
+
+## Troubleshooting
+
+### Port Already in Use
+```bash
+# Use a different port
+python deploy_manual.py --platform local --port 8080
+```
+
+### Missing Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### Python Version Issues
+- Requires Python 3.8 or higher
+- Check: `python --version`
+
+## Production Considerations
+
+1. **Environment Variables**: Never commit `.env` to version control
+2. **Database**: Configure production database in `.env`
+3. **Secrets**: Use platform secret managers (Heroku Config Vars, Railway Variables, etc.)
+4. **HTTPS**: Cloud platforms provide free HTTPS
+5. **Scaling**: Use platform-specific scaling options
+
+## Support
+
+For issues, check the main README.md or deployment platform documentation.
+'''
+        
+        (self.repo_path / "DEPLOYMENT.md").write_text(deploy_readme, encoding='utf-8')
+        logger.info(f"📖 Deployment guide created: {self.repo_path / 'DEPLOYMENT.md'}")
 
     async def _create_github_repository(self) -> str:
         """Create GitHub repository with full setup."""
@@ -1034,27 +1439,18 @@ SOFTWARE.
             {"stage": "github_setup"}
         )
         
-        if not self.github_config.token:
-            # Request GitHub token from user
-            await self._broadcast_ops_message(
-                "github_token_required",
-                "🔑 GitHub Personal Access Token required",
-                {
-                    "stage": "github_setup",
-                    "ui_component": "GitHubTokenInput",
-                    "instructions": "Please provide a GitHub PAT with 'repo' scope"
-                }
-            )
-            # In production, wait for user input
-            # self.github_config.token = await self._wait_for_github_token()
-            
-            # For simulation, skip actual creation
+        if not self.github_config.token or not self.github_config.username:
+            # Missing credentials
             github_url = f"https://github.com/{self.github_config.username or 'user'}/{self.github_config.repo_name or 'ai-app'}"
             
             await self._broadcast_ops_message(
-                "github_repo_simulated",
-                f"📝 GitHub repo would be created at: {github_url}",
-                {"stage": "github_setup", "url": github_url}
+                "github_credentials_missing",
+                "⚠️ GitHub credentials not configured in .env file. Please add GITHUB_TOKEN and GITHUB_USERNAME.",
+                {
+                    "stage": "github_setup",
+                    "url": github_url,
+                    "instructions": "Add to .env file: GITHUB_TOKEN=your_token_here and GITHUB_USERNAME=your_username"
+                }
             )
             
             return github_url
@@ -1089,8 +1485,12 @@ SOFTWARE.
             "Accept": "application/vnd.github.v3+json"
         }
         
+        # Generate repo name if not set
+        if not self.github_config.repo_name:
+            self.github_config.repo_name = f"ai-app-{self.deployment_id}"
+        
         repo_data = {
-            "name": self.github_config.repo_name or f"ai-app-{self.deployment_id}",
+            "name": self.github_config.repo_name,
             "description": self.github_config.description,
             "private": self.github_config.private,
             "auto_init": False,  # We'll push our own content
@@ -1106,6 +1506,7 @@ SOFTWARE.
         
         if response.status_code == 201:
             repo_info = response.json()
+            logger.info(f"✅ GitHub repository created: {self.github_config.repo_name}")
             return repo_info["html_url"]
         else:
             raise Exception(f"GitHub API error: {response.status_code} - {response.text}")
@@ -1222,7 +1623,7 @@ jobs:
         echo "Deployment completed successfully!"
 """
         
-        (workflows_dir / "ci-cd.yml").write_text(workflow)
+        (workflows_dir / "ci-cd.yml").write_text(workflow, encoding='utf-8')
         
         # Security scanning workflow
         security_workflow = """name: Security Scan
@@ -1254,7 +1655,7 @@ jobs:
         sarif_file: 'trivy-results.sarif'
 """
         
-        (workflows_dir / "security.yml").write_text(security_workflow)
+        (workflows_dir / "security.yml").write_text(security_workflow, encoding='utf-8')
 
     async def _generate_all_deployment_configs(self):
         """Generate deployment configs for all platforms."""
@@ -1274,7 +1675,7 @@ jobs:
                 )
                 
                 file_path = self.repo_path / filename
-                file_path.write_text(final_content)
+                file_path.write_text(final_content, encoding='utf-8')
         
         # Generate Dockerfile
         await self._generate_production_dockerfile()
@@ -1346,7 +1747,7 @@ LABEL org.opencontainers.image.source="https://github.com/ai-dev-agent"
 CMD ["python", "src/main.py"]
 """
         
-        (self.repo_path / "Dockerfile").write_text(dockerfile)
+        (self.repo_path / "Dockerfile").write_text(dockerfile, encoding='utf-8')
 
     async def _generate_docker_compose(self):
         """Generate Docker Compose for local development."""
@@ -1406,10 +1807,37 @@ volumes:
   postgres-data:
 """
         
-        (self.repo_path / "docker-compose.yml").write_text(compose)
+        (self.repo_path / "docker-compose.yml").write_text(compose, encoding='utf-8')
+
+    def _check_docker_available(self) -> bool:
+        """Check if Docker is available and running."""
+        try:
+            result = subprocess.run(
+                ["docker", "ps"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            return False
 
     async def _build_and_push_docker_image(self) -> Dict[str, Any]:
-        """Build and push Docker image."""
+        """Build and push Docker image (skip if Docker not available)."""
+        # Check if Docker is available
+        if not self._check_docker_available():
+            logger.warning("⚠️  Docker is not available or not running - skipping Docker build")
+            await self._broadcast_ops_message(
+                "docker_build_skipped",
+                "⚠️  Docker not available - deployment prepared without container",
+                {"stage": "docker_build", "status": "skipped"}
+            )
+            return {
+                "status": "skipped",
+                "reason": "Docker not available",
+                "manual_deploy_script": str(self.repo_path / "deploy_manual.py")
+            }
+        
         await self._broadcast_ops_message(
             "docker_build_started",
             "🐳 Building Docker image...",
@@ -1450,23 +1878,54 @@ volumes:
             "size": image_size
         }
 
-    async def _deploy_to_platforms(self, platforms: List[str]) -> List[Dict[str, Any]]:
-        """Deploy to selected platforms."""
-        results = []
+    async def _deploy_to_platforms(self, platforms: List[str]) -> Dict[str, Any]:
+        """
+        Deploy to platform(s) with proper error handling.
+        Returns a standardized result structure regardless of success/failure.
+        """
+        # Check if Docker was skipped
+        if not self._docker_available:
+            logger.info("📦 Docker not available - preparing manual deployment info")
+            return {
+                "status": "manual_deployment_ready",
+                "message": "Deployment files prepared. Use deploy_manual.py for manual deployment.",
+                "docker_skipped": True,
+                "platforms": [],  # Empty list, not missing
+                "manual_deploy_script": str(self.repo_path / "deploy_manual.py"),
+                "manual_deploy_guide": str(self.repo_path / "DEPLOYMENT.md")
+            }
         
-        for platform_key in platforms:
-            try:
-                result = await self._deploy_to_platform(platform_key)
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Deployment to {platform_key} failed: {e}")
-                results.append({
-                    "platform": platform_key,
-                    "status": "failed",
-                    "error": str(e)
-                })
-        
-        return results
+        # Docker available - proceed with platform deployments
+        try:
+            results = []
+            for platform_key in platforms:
+                try:
+                    result = await self._deploy_to_platform(platform_key)
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"Deployment to {platform_key} failed: {e}")
+                    results.append({
+                        "platform": platform_key,
+                        "status": "failed",
+                        "error": str(e),
+                        "url": None
+                    })
+            
+            return {
+                "status": "deployed" if any(r.get("status") == "success" for r in results) else "failed",
+                "message": f"Deployed to {len([r for r in results if r.get('status') == 'success'])} platform(s)",
+                "docker_skipped": False,
+                "platforms": results
+            }
+        except Exception as e:
+            logger.error(f"Platform deployment error: {e}")
+            return {
+                "status": "failed",
+                "message": f"Deployment failed: {str(e)}",
+                "docker_skipped": False,
+                "platforms": [],
+                "error": str(e)
+            }
 
     async def _deploy_to_platform(self, platform_key: str) -> Dict[str, Any]:
         """Deploy to specific platform."""
@@ -1510,10 +1969,69 @@ volumes:
         }
 
     async def _deploy_to_render(self) -> str:
-        """Deploy to Render.com."""
-        # In production, use Render API
-        # For now, return simulated URL
-        return f"https://ai-app-{self.deployment_id}.onrender.com"
+        """Deploy to Render.com using API."""
+        if not self.render_api_key:
+            logger.warning("⚠️ Render API key not provided - returning simulated URL")
+            return f"https://ai-app-{self.deployment_id}.onrender.com (simulated)"
+        
+        try:
+            # Get GitHub repo URL from the GitHub config
+            if not self.github_config.username or not self.github_config.repo_name:
+                raise Exception("GitHub repository must be created first for Render deployment")
+            
+            github_repo_url = f"https://github.com/{self.github_config.username}/{self.github_config.repo_name}"
+            
+            # Prepare Render API request
+            headers = {
+                "Authorization": f"Bearer {self.render_api_key}",
+                "Content-Type": "application/json",
+            }
+            
+            # Create a web service on Render
+            service_name = f"ai-app-{self.deployment_id}"
+            payload = {
+                "name": service_name,
+                "type": "web_service",
+                "repo": github_repo_url,
+                "branch": "main",
+                "runtime": "python",
+                "buildCommand": "pip install -r requirements.txt",
+                "startCommand": "python main.py",
+                "envVars": [
+                    {"key": "PYTHON_VERSION", "value": "3.11.0"}
+                ],
+                "plan": "free",  # Use free tier
+                "region": "oregon"  # Default region
+            }
+            
+            logger.info(f"🚀 Creating Render service: {service_name}")
+            response = requests.post(
+                "https://api.render.com/v1/services",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201]:
+                service_data = response.json()
+                service_id = service_data.get("service", {}).get("id")
+                service_url = service_data.get("service", {}).get("serviceDetails", {}).get("url")
+                
+                if service_url:
+                    logger.info(f"✅ Render deployment successful: {service_url}")
+                    return service_url
+                else:
+                    # Return a constructed URL if not provided
+                    return f"https://{service_name}.onrender.com"
+            else:
+                error_msg = response.text
+                logger.error(f"❌ Render API error ({response.status_code}): {error_msg}")
+                raise Exception(f"Render deployment failed: {error_msg}")
+                
+        except Exception as e:
+            logger.error(f"❌ Render deployment failed: {e}")
+            # Return simulated URL as fallback
+            return f"https://ai-app-{self.deployment_id}.onrender.com (deployment-failed)"
 
     async def _deploy_to_railway(self) -> str:
         """Deploy to Railway.app."""
@@ -1565,7 +2083,7 @@ volumes:
             }
         }
         
-        (self.repo_path / "monitoring.json").write_text(json.dumps(monitoring_config, indent=2))
+        (self.repo_path / "monitoring.json").write_text(json.dumps(monitoring_config, indent=2), encoding='utf-8')
         
         # Simulated monitoring URL
         monitoring_url = f"https://monitoring.aidevagent.com/dashboard/{self.deployment_id}"
@@ -1580,27 +2098,49 @@ volumes:
 
     async def _generate_deployment_dashboard(
         self, build_time: float, github_url: str,
-        deployment_results: List[Dict], monitoring_url: str
+        deployment_results: Dict[str, Any], monitoring_url: str
     ) -> Dict[str, Any]:
         """Generate comprehensive deployment dashboard data."""
+        
+        # Extract deployment URL safely
+        deployment_url = None
+        if isinstance(deployment_results, dict):
+            # Handle dict structure
+            if "platforms" in deployment_results and deployment_results["platforms"]:
+                # Get first successful deployment URL
+                for platform in deployment_results["platforms"]:
+                    if platform.get("status") == "success" and platform.get("url"):
+                        deployment_url = platform["url"]
+                        break
+            elif "manual_deploy_script" in deployment_results:
+                # Manual deployment case
+                deployment_url = None  # No live URL yet
+        
+        # Calculate dependencies count safely
+        try:
+            deps = await self._analyze_dependencies()
+            dependencies_count = len(deps.get('third_party', set()))
+        except Exception as e:
+            logger.warning(f"Could not analyze dependencies: {e}")
+            dependencies_count = 0
         
         self.metrics = DeploymentMetrics(
             deployment_id=self.deployment_id,
             build_time=build_time,
             image_size=0,  # Would be filled from Docker build
-            dependencies_count=len((await self._analyze_dependencies()).get('third_party', set())),
+            dependencies_count=dependencies_count,
             security_vulnerabilities=0,
             test_coverage=0.0,
-            deployment_status="completed",
+            deployment_status="completed" if deployment_results.get("status") in ["deployed", "manual_deployment_ready"] else "failed",
             timestamp=datetime.now().isoformat(),
             platform=self.selected_platform or "multiple",
             github_repo_url=github_url,
-            deployment_url=deployment_results[0]["url"] if deployment_results else None
+            deployment_url=deployment_url
         )
         
         dashboard = {
             "deployment_id": self.deployment_id,
-            "status": "✅ COMPLETED",
+            "status": "✅ COMPLETED" if deployment_results.get("status") in ["deployed", "manual_deployment_ready"] else "⚠️ PARTIAL",
             "build_time_seconds": build_time,
             "timestamp": datetime.now().isoformat(),
             "github": {
@@ -1608,28 +2148,60 @@ volumes:
                 "branch": "main",
                 "ci_cd": "GitHub Actions enabled"
             },
-            "deployments": deployment_results,
+            "deployments": deployment_results,  # Keep original structure
             "monitoring": {
                 "dashboard_url": monitoring_url,
-                "health_check": "Active",
-                "uptime": "100%"
+                "health_check": "Ready" if deployment_url else "Pending",
+                "uptime": "N/A" if not deployment_url else "100%"
             },
             "metrics": asdict(self.metrics),
             "api_keys_configured": len(self.user_provided_secrets),
-            "next_steps": [
-                "Configure environment variables in platform dashboard",
-                "Setup custom domain (if needed)",
-                "Configure CI/CD secrets in GitHub",
-                "Review monitoring alerts",
-                "Test deployment endpoints"
-            ],
+            "next_steps": self._generate_next_steps(deployment_results),
             "estimated_monthly_cost": "Free (within limits)"
         }
         
         # Save dashboard data
-        (self.repo_path / "deployment_dashboard.json").write_text(json.dumps(dashboard, indent=2))
+        dashboard_file = self.repo_path / "deployment_dashboard.json"
+        dashboard_file.write_text(json.dumps(dashboard, indent=2), encoding='utf-8')
+        logger.info(f"📊 Dashboard saved to: {dashboard_file}")
         
         return dashboard
+
+    def _generate_next_steps(self, deployment_results: Dict[str, Any]) -> List[str]:
+        """Generate context-aware next steps based on deployment status."""
+        
+        docker_skipped = deployment_results.get("docker_skipped", False)
+        
+        if docker_skipped:
+            return [
+                "Run local deployment: python deploy_manual.py --platform local",
+                "Deploy to Heroku: python deploy_manual.py --platform heroku",
+                "Deploy to Render: python deploy_manual.py --platform render",
+                "Deploy to Railway: python deploy_manual.py --platform railway",
+                "Read DEPLOYMENT.md for detailed instructions",
+                "Configure environment variables from .env.example",
+                "Setup custom domain (optional)",
+            ]
+        else:
+            platforms = deployment_results.get("platforms", [])
+            successful_deploys = [p for p in platforms if p.get("status") == "success"]
+            
+            steps = []
+            if successful_deploys:
+                steps.extend([
+                    f"Visit your deployed app: {successful_deploys[0].get('url')}",
+                    "Configure environment variables in platform dashboard",
+                    "Setup custom domain (if needed)",
+                ])
+            
+            steps.extend([
+                "Configure CI/CD secrets in GitHub",
+                "Review monitoring alerts",
+                "Test deployment endpoints",
+                "Setup database backups (if applicable)",
+            ])
+            
+            return steps
 
     def _format_completion_message(self, dashboard: Dict[str, Any]) -> str:
         """Format completion message for user."""
@@ -1648,9 +2220,25 @@ volumes:
 **🚀 Deployments:**
 """
         
-        for deployment in dashboard['deployments']:
-            message += f"\n- **{deployment['platform']}**: {deployment['url']}"
-            message += f"\n  Cost: {deployment['estimated_cost']}"
+        # Handle new deployment structure
+        deployments = dashboard.get('deployments', {})
+        docker_skipped = deployments.get('docker_skipped', False)
+        
+        if docker_skipped:
+            message += "\n⚠️  **Docker not available - Manual deployment prepared**"
+            message += f"\n\n📦 **Manual Deployment Options:**"
+            message += f"\n- Local: `python deploy_manual.py --platform local`"
+            message += f"\n- Heroku: `python deploy_manual.py --platform heroku`"
+            message += f"\n- Render: `python deploy_manual.py --platform render`"
+            message += f"\n- Railway: `python deploy_manual.py --platform railway`"
+            message += f"\n\n📖 See DEPLOYMENT.md for detailed instructions"
+        else:
+            platforms = deployments.get('platforms', [])
+            for deployment in platforms:
+                status_icon = "✅" if deployment.get("status") == "success" else "❌"
+                message += f"\n{status_icon} **{deployment['platform']}**: {deployment.get('url', 'N/A')}"
+                if deployment.get('estimated_cost'):
+                    message += f"\n   Cost: {deployment['estimated_cost']}"
         
         message += f"""
 

@@ -17,6 +17,9 @@ from models.plan import Plan
 from models.enums import TaskStatus
 from parse.websocket_manager import WebSocketManager
 from utils.llm_setup import ask_llm_streaming, ask_llm, LLMError
+from utils.documentation_generator import DocumentationGenerator
+from utils.test_generator import TestGenerator
+from utils.code_modifier import CodeModifier, ModificationResult
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 # Output folder for dev agent results
 DEV_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Model configuration - use gemini-2.5-pro for dev agent (higher quality code)
+DEV_MODEL = os.getenv("DEV_MODEL", "gemini-2.5-pro")
 
 class DevAgent:
     def __init__(self, websocket_manager: WebSocketManager = None):
@@ -45,6 +51,15 @@ class DevAgent:
         self.is_plan_complete = False # Flag from PM Agent that no more tasks will be sent
         self.is_processing_active = False # Flag for dev agent to run task processing
         self.max_concurrent_tasks = 2  # Allow parallel processing where possible
+        
+        # Documentation generator
+        self.doc_generator = DocumentationGenerator(model=DEV_MODEL)
+        
+        # Test generator
+        self.test_generator = TestGenerator(model=DEV_MODEL)
+        
+        # Code modifier
+        self.code_modifier = CodeModifier(model=DEV_MODEL)
 
     async def handle_plan_start(self, plan_id: str, plan_title: str, plan_description: str):
         """Handle the start of a new plan from PM Agent."""
@@ -568,7 +583,7 @@ Please provide a complete, production-ready implementation that follows enterpri
             async for _ in ask_llm_streaming(
                 user_prompt=user_prompt,
                 system_prompt=system_prompt,
-                model="gemini-2.5-flash",
+                model=DEV_MODEL,  # Use gemini-2.5-pro for higher quality code generation
                 temperature=0.3,
                 callback=stream_chunk_callback
             ):
@@ -754,6 +769,7 @@ Please provide a complete, production-ready implementation that follows enterpri
 
             # Save each code file separately, preserving directory structure
             saved_files = []
+            file_count = 0
             for filename, file_info in code_files.items():
                 code_content = file_info['content']
                 language = file_info['language']
@@ -771,7 +787,8 @@ Please provide a complete, production-ready implementation that follows enterpri
                 try:
                     code_file.write_text(code_content, encoding="utf-8")
                     saved_files.append(filename)
-                    logger.info(f"Dev Agent: Saved code file {filename} for task {task.id}")
+                    file_count += 1
+                    logger.info(f"Dev Agent: Saved code file {filename} for task {task.id} ({file_count}/{len(code_files)})")
                     
                     # Send file_generated event with content for immediate viewing
                     file_path_relative = str(code_file.relative_to(DEV_OUTPUT_DIR.parent))
@@ -785,6 +802,26 @@ Please provide a complete, production-ready implementation that follows enterpri
                         "file_type": language,
                         "timestamp": datetime.now().isoformat()
                     })
+                    
+                    # Send incremental summary every 5 files
+                    if file_count % 5 == 0:
+                        recent_files = saved_files[-5:]
+                        summary_message = f"📦 **Progress Update:** Created {file_count}/{len(code_files)} files for '{task.title}'\n\n"
+                        summary_message += "**Recent files:**\n"
+                        for f in recent_files:
+                            summary_message += f"• `{f}`\n"
+                        
+                        await self.websocket_manager.broadcast_message({
+                            "type": "dev_progress_summary",
+                            "task_id": task.id,
+                            "task_title": task.title,
+                            "files_created": file_count,
+                            "total_files": len(code_files),
+                            "recent_files": recent_files,
+                            "message": summary_message,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    
                 except Exception as file_error:
                     logger.error(f"DevAgent: Failed to write code file {filename} for task {task.id}: {file_error}", exc_info=True)
                     await self.websocket_manager.broadcast_message({
@@ -821,6 +858,22 @@ Please provide a complete, production-ready implementation that follows enterpri
                 "file_name": str(metadata_file.relative_to(DEV_OUTPUT_DIR)),
                 "content": metadata_json,
                 "file_type": "json",
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # Generate documentation for the code
+            doc_files = await self._generate_task_documentation(task, code_files, task_dir)
+            
+            # Generate tests for the code
+            test_files = await self._generate_task_tests(task, code_files, task_dir)
+            
+            # Generate comprehensive completion summary
+            summary = await self._generate_completion_summary(task, saved_files, task_dir, test_files)
+            await self.websocket_manager.broadcast_message({
+                "type": "dev_completion_summary",
+                "task_id": task.id,
+                "task_title": task.title,
+                "message": summary,
                 "timestamp": datetime.now().isoformat()
             })
 
@@ -866,6 +919,388 @@ Please provide a complete, production-ready implementation that follows enterpri
                 "timestamp": datetime.now().isoformat()
             })
             return task
+    
+    async def _generate_task_documentation(
+        self, 
+        task: Task, 
+        code_files: Dict[str, Dict[str, str]], 
+        task_dir: Path
+    ) -> Dict[str, str]:
+        """
+        Generate documentation for the task's code.
+        
+        Args:
+            task: The task being documented
+            code_files: Dictionary of filename -> {content, language}
+            task_dir: Directory where task output is saved
+            
+        Returns:
+            Dictionary of documentation filename -> content
+        """
+        logger.info(f"Dev Agent: Generating documentation for task '{task.title}'")
+        
+        try:
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "documentation_generation_started",
+                "task_id": task.id,
+                "message": f"📝 Generating documentation for '{task.title}'...",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Extract just the code content from code_files
+            code_content = {
+                filename: file_info['content'] 
+                for filename, file_info in code_files.items()
+            }
+            
+            # Extract project information from task and plan context
+            project_name = self.plan_context.get('title', task.title)
+            project_description = self.plan_context.get('description', task.description)
+            
+            # Detect tech stack from code files
+            tech_stack = self._detect_tech_stack(code_content)
+            
+            # Extract environment variables if .env.example exists
+            env_vars = self._extract_env_vars(code_content)
+            
+            # Generate all documentation
+            docs = await self.doc_generator.generate_all_documentation(
+                project_name=project_name,
+                project_description=project_description,
+                code_files=code_content,
+                tech_stack=tech_stack,
+                environment_vars=env_vars
+            )
+            
+            # Save documentation files
+            docs_dir = task_dir / "docs"
+            docs_dir.mkdir(exist_ok=True)
+            
+            saved_docs = []
+            for doc_filename, doc_content in docs.items():
+                doc_path = docs_dir / doc_filename
+                doc_path.write_text(doc_content, encoding="utf-8")
+                saved_docs.append(doc_filename)
+                
+                logger.info(f"Dev Agent: Saved documentation file {doc_filename}")
+                
+                # Send documentation preview to UI
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "documentation_generated",
+                    "task_id": task.id,
+                    "doc_type": doc_filename.replace('.md', '').replace('_', ' ').title(),
+                    "file_name": doc_filename,
+                    "file_path": str(doc_path.relative_to(DEV_OUTPUT_DIR.parent)).replace('\\', '/'),
+                    "content": doc_content[:1000] + "..." if len(doc_content) > 1000 else doc_content,
+                    "full_content": doc_content,
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "documentation_generation_completed",
+                "task_id": task.id,
+                "message": f"✅ Generated {len(saved_docs)} documentation files",
+                "files": saved_docs,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            logger.info(f"Dev Agent: Documentation generation completed for task '{task.title}'")
+            return docs
+            
+        except Exception as e:
+            logger.error(f"Dev Agent: Failed to generate documentation for task {task.id}: {e}", exc_info=True)
+            
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "documentation_generation_failed",
+                "task_id": task.id,
+                "error": str(e),
+                "message": f"⚠️ Documentation generation failed: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Return empty dict on failure - don't fail the entire task
+            return {}
+    
+    async def _generate_task_tests(
+        self, 
+        task: Task, 
+        code_files: Dict[str, Dict[str, str]], 
+        task_dir: Path
+    ) -> Dict[str, str]:
+        """
+        Generate tests for the task's code.
+        
+        Args:
+            task: The task being tested
+            code_files: Dictionary of filename -> {content, language}
+            task_dir: Directory where task output is saved
+            
+        Returns:
+            Dictionary of test filename -> content
+        """
+        logger.info(f"Dev Agent: Generating tests for task '{task.title}'")
+        
+        try:
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "test_generation_started",
+                "task_id": task.id,
+                "message": f"🧪 Generating tests for '{task.title}'...",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Analyze code to identify testable units
+            analysis = self.test_generator.analyze_code(code_files)
+            
+            # Generate unit tests
+            unit_tests = await self.test_generator.generate_unit_tests(
+                code_files, 
+                analysis=analysis,
+                target_coverage=70.0
+            )
+            
+            # Generate integration tests if API endpoints found
+            integration_tests = await self.test_generator.generate_integration_tests(
+                code_files,
+                analysis=analysis
+            )
+            
+            # Generate component tests if frontend components found
+            component_tests = await self.test_generator.generate_component_tests(
+                code_files,
+                analysis=analysis
+            )
+            
+            # Combine all test files
+            all_tests = {**unit_tests, **integration_tests, **component_tests}
+            
+            if not all_tests:
+                logger.info(f"Dev Agent: No tests generated for task '{task.title}' (no testable units found)")
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "test_generation_skipped",
+                    "task_id": task.id,
+                    "message": f"ℹ️ No tests generated (no testable units found)",
+                    "timestamp": datetime.now().isoformat()
+                })
+                return {}
+            
+            # Save test files
+            tests_dir = task_dir / "tests"
+            tests_dir.mkdir(exist_ok=True)
+            
+            saved_tests = []
+            for test_filename, test_content in all_tests.items():
+                # Create test file path
+                test_path = task_dir / test_filename
+                test_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                test_path.write_text(test_content, encoding="utf-8")
+                saved_tests.append(test_filename)
+                
+                logger.info(f"Dev Agent: Saved test file {test_filename}")
+                
+                # Send test file to UI
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "test_file_generated",
+                    "task_id": task.id,
+                    "file_name": test_filename,
+                    "file_path": str(test_path.relative_to(DEV_OUTPUT_DIR.parent)).replace('\\', '/'),
+                    "content": test_content[:1000] + "..." if len(test_content) > 1000 else test_content,
+                    "full_content": test_content,
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            # Calculate coverage
+            coverage_stats = self.test_generator.calculate_coverage(analysis, all_tests)
+            
+            # Send completion message with coverage stats
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "test_generation_completed",
+                "task_id": task.id,
+                "message": f"✅ Generated {len(saved_tests)} test files",
+                "files": saved_tests,
+                "coverage_stats": coverage_stats,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            logger.info(f"Dev Agent: Test generation completed for task '{task.title}'")
+            logger.info(f"  - Unit tests: {len(unit_tests)}")
+            logger.info(f"  - Integration tests: {len(integration_tests)}")
+            logger.info(f"  - Component tests: {len(component_tests)}")
+            logger.info(f"  - Estimated coverage: {coverage_stats['estimated_coverage']}%")
+            
+            return all_tests
+            
+        except Exception as e:
+            logger.error(f"Dev Agent: Failed to generate tests for task {task.id}: {e}", exc_info=True)
+            
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "test_generation_failed",
+                "task_id": task.id,
+                "error": str(e),
+                "message": f"⚠️ Test generation failed: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Return empty dict on failure - don't fail the entire task
+            return {}
+    
+    def _detect_tech_stack(self, code_files: Dict[str, str]) -> List[str]:
+        """Detect technology stack from code files."""
+        tech_stack = set()
+        
+        for filename, content in code_files.items():
+            # Python frameworks
+            if 'fastapi' in content.lower() or 'from fastapi import' in content:
+                tech_stack.add('FastAPI')
+            if 'flask' in content.lower() or 'from flask import' in content:
+                tech_stack.add('Flask')
+            if 'django' in content.lower():
+                tech_stack.add('Django')
+            
+            # JavaScript frameworks
+            if 'react' in content.lower() or 'import React' in content:
+                tech_stack.add('React')
+            if 'vue' in content.lower():
+                tech_stack.add('Vue.js')
+            if 'express' in content.lower():
+                tech_stack.add('Express.js')
+            
+            # Databases
+            if 'postgresql' in content.lower() or 'psycopg2' in content:
+                tech_stack.add('PostgreSQL')
+            if 'mysql' in content.lower():
+                tech_stack.add('MySQL')
+            if 'mongodb' in content.lower():
+                tech_stack.add('MongoDB')
+            if 'redis' in content.lower():
+                tech_stack.add('Redis')
+            
+            # File extensions
+            if filename.endswith('.py'):
+                tech_stack.add('Python')
+            elif filename.endswith(('.js', '.jsx')):
+                tech_stack.add('JavaScript')
+            elif filename.endswith(('.ts', '.tsx')):
+                tech_stack.add('TypeScript')
+        
+        return sorted(list(tech_stack))
+    
+    def _extract_env_vars(self, code_files: Dict[str, str]) -> Dict[str, str]:
+        """Extract environment variables from .env.example or similar files."""
+        env_vars = {}
+        
+        for filename, content in code_files.items():
+            if '.env' in filename.lower() or 'config' in filename.lower():
+                # Parse environment variable patterns
+                lines = content.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        env_vars[key.strip()] = value.strip()
+        
+        return env_vars
+    
+    async def _generate_completion_summary(self, task: Task, saved_files: List[str], task_dir: Path, test_files: Dict[str, str] = None) -> str:
+        """Generate comprehensive completion summary with implementation details and config needs."""
+        summary = f"✅ **Development Complete: {task.title}**\n\n"
+        summary += f"📊 **Statistics:**\n"
+        summary += f"• Total files created: **{len(saved_files)}**\n"
+        summary += f"• Output directory: `{task_dir.name}`\n\n"
+        
+        # Categorize files by type
+        file_categories = {
+            "Backend": [f for f in saved_files if any(x in f.lower() for x in ['backend', 'api', 'server', 'routes', 'controllers'])],
+            "Frontend": [f for f in saved_files if any(x in f.lower() for x in ['frontend', 'components', 'pages', 'views', 'ui'])],
+            "Database": [f for f in saved_files if any(x in f.lower() for x in ['models', 'schema', 'database', 'migrations'])],
+            "Configuration": [f for f in saved_files if any(x in f.lower() for x in ['config', '.env', 'settings', 'docker'])],
+            "Tests": [f for f in saved_files if any(x in f.lower() for x in ['test_', 'tests/'])],
+            "Documentation": [f for f in saved_files if any(x in f.lower() for x in ['readme', '.md', 'docs'])],
+        }
+        
+        summary += "📁 **Files Created:**\n"
+        for category, files in file_categories.items():
+            if files:
+                summary += f"\n**{category}:**\n"
+                for f in files[:10]:  # Limit to 10 per category
+                    summary += f"• `{f}`\n"
+                if len(files) > 10:
+                    summary += f"• ... and {len(files) - 10} more files\n"
+        
+        # Detect configuration requirements
+        config_needs = []
+        env_file = task_dir / ".env.example"
+        if env_file.exists():
+            try:
+                env_content = env_file.read_text(encoding="utf-8")
+                if "API_KEY" in env_content or "SECRET" in env_content:
+                    config_needs.append("🔑 **API Keys/Secrets Required** - Check `.env.example`")
+                if "DATABASE" in env_content or "DB_" in env_content:
+                    config_needs.append("🗄️ **Database Configuration** - Set database connection strings")
+                if "REDIS" in env_content or "CACHE" in env_content:
+                    config_needs.append("⚡ **Redis/Cache Setup** - Configure caching service")
+            except Exception as e:
+                logger.warning(f"Could not read .env.example: {e}")
+        
+        # Check requirements.txt for tech stack
+        req_file = task_dir / "requirements.txt"
+        if req_file.exists():
+            try:
+                req_content = req_file.read_text(encoding="utf-8")
+                summary += f"\n📦 **Tech Stack Detected:**\n"
+                key_deps = [line.split('==')[0].split('>=')[0].strip() 
+                           for line in req_content.split('\n') 
+                           if line.strip() and not line.startswith('#')][:10]
+                for dep in key_deps:
+                    summary += f"• {dep}\n"
+            except Exception as e:
+                logger.warning(f"Could not read requirements.txt: {e}")
+        
+        if config_needs:
+            summary += f"\n⚙️ **Configuration Needed:**\n"
+            for need in config_needs:
+                summary += f"{need}\n"
+        
+        # Add test information if tests were generated
+        if test_files:
+            summary += f"\n🧪 **Tests Generated:**\n"
+            summary += f"• Total test files: **{len(test_files)}**\n"
+            
+            # Categorize test types
+            unit_tests = [f for f in test_files.keys() if 'test_' in f and 'integration' not in f and 'component' not in f]
+            integration_tests = [f for f in test_files.keys() if 'integration' in f]
+            component_tests = [f for f in test_files.keys() if 'component' in f or '.test.' in f]
+            
+            if unit_tests:
+                summary += f"• Unit tests: {len(unit_tests)}\n"
+            if integration_tests:
+                summary += f"• Integration tests: {len(integration_tests)}\n"
+            if component_tests:
+                summary += f"• Component tests: {len(component_tests)}\n"
+            
+            summary += f"• Target coverage: **70%**\n"
+        
+        summary += f"\n🚀 **Next Steps:**\n"
+        summary += f"1. Review generated code in `{task_dir.name}`\n"
+        summary += f"2. Configure environment variables (if any)\n"
+        if test_files:
+            summary += f"3. Run tests: `pytest tests/` or `npm test`\n"
+            summary += f"4. QA Agent will validate the implementation\n"
+            summary += f"5. Ops Agent will deploy to GitHub\n"
+        else:
+            summary += f"3. QA Agent will test the implementation\n"
+            summary += f"4. Ops Agent will deploy to GitHub\n"
+        
+        return summary
     
     # Keep existing methods for compatibility
     def _get_latest_plan(self) -> Optional[Path]:
@@ -915,6 +1350,173 @@ Please provide a complete, production-ready implementation that follows enterpri
 
         return all_succeeded
 
+    async def modify_code(
+        self,
+        project_id: str,
+        file_path: str,
+        modification_request: str
+    ) -> ModificationResult:
+        """
+        Modify existing code using the CodeModifier with LangGraph workflow.
+        
+        Args:
+            project_id: ID of the project being modified
+            file_path: Path to the file to modify (relative or absolute)
+            modification_request: Natural language description of desired changes
+            
+        Returns:
+            ModificationResult with success status, modified content, and diff
+        """
+        logger.info(f"Dev Agent: Starting code modification for project {project_id}")
+        logger.info(f"  File: {file_path}")
+        logger.info(f"  Request: {modification_request}")
+        
+        try:
+            # Broadcast modification started event
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "code_modification_started",
+                "project_id": project_id,
+                "file_path": file_path,
+                "request": modification_request,
+                "message": f"Dev Agent: Starting code modification for {file_path}",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Load existing file content
+            file_full_path = Path(file_path)
+            if not file_full_path.is_absolute():
+                # Try to find file in dev outputs or project directory
+                possible_paths = [
+                    DEV_OUTPUT_DIR / file_path,
+                    Path.cwd() / file_path,
+                    Path.cwd() / "generated_code" / "projects" / project_id / file_path
+                ]
+                
+                for path in possible_paths:
+                    if path.exists():
+                        file_full_path = path
+                        break
+            
+            if not file_full_path.exists():
+                error_msg = f"File not found: {file_path}"
+                logger.error(error_msg)
+                
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "code_modification_failed",
+                    "project_id": project_id,
+                    "file_path": file_path,
+                    "error": error_msg,
+                    "message": f"Dev Agent: {error_msg}",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return ModificationResult(
+                    success=False,
+                    modified_files={},
+                    diff="",
+                    validation_errors=[error_msg],
+                    rollback_available=False,
+                    metadata={"error": error_msg}
+                )
+            
+            # Read original content
+            original_content = file_full_path.read_text(encoding="utf-8")
+            
+            # Create backup
+            backup_path = file_full_path.with_suffix(file_full_path.suffix + ".backup")
+            backup_path.write_text(original_content, encoding="utf-8")
+            logger.info(f"Dev Agent: Created backup at {backup_path}")
+            
+            # Broadcast analysis started
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "code_modification_analyzing",
+                "project_id": project_id,
+                "file_path": file_path,
+                "message": "Dev Agent: Analyzing code and planning modifications...",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Use CodeModifier to modify the code
+            result = await self.code_modifier.modify_code(
+                file_path=str(file_full_path),
+                original_content=original_content,
+                modification_request=modification_request
+            )
+            
+            if result.success:
+                # Save modified content
+                modified_content = result.modified_files.get(str(file_full_path), "")
+                if modified_content:
+                    file_full_path.write_text(modified_content, encoding="utf-8")
+                    logger.info(f"Dev Agent: Saved modified code to {file_full_path}")
+                
+                # Broadcast success with diff
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "code_modification_completed",
+                    "project_id": project_id,
+                    "file_path": file_path,
+                    "diff": result.diff,
+                    "backup_path": str(backup_path),
+                    "message": f"Dev Agent: Successfully modified {file_path}",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                # Send diff preview
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "code_modification_diff",
+                    "project_id": project_id,
+                    "file_path": file_path,
+                    "content": result.diff,
+                    "message": "Code modification diff",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                logger.info(f"Dev Agent: Code modification completed successfully for {file_path}")
+                
+            else:
+                # Modification failed - restore from backup
+                file_full_path.write_text(original_content, encoding="utf-8")
+                logger.error(f"Dev Agent: Code modification failed, restored from backup")
+                
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "code_modification_failed",
+                    "project_id": project_id,
+                    "file_path": file_path,
+                    "errors": result.validation_errors,
+                    "message": f"Dev Agent: Code modification failed: {'; '.join(result.validation_errors)}",
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Dev Agent: Code modification error: {e}", exc_info=True)
+            
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "code_modification_failed",
+                "project_id": project_id,
+                "file_path": file_path,
+                "error": str(e),
+                "message": f"Dev Agent: Code modification error: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            return ModificationResult(
+                success=False,
+                modified_files={},
+                diff="",
+                validation_errors=[str(e)],
+                rollback_available=False,
+                metadata={"error": str(e)}
+            )
+    
     def _save_updated_plan(self):
         """Save the current plan with updated task statuses."""
         if self.current_plan:
@@ -1262,7 +1864,7 @@ Return ONLY the complete fixed code, no explanations or markdown:
             fixed_code = await ask_llm(
                 user_prompt=fix_prompt,
                 system_prompt="You are a software developer fixing code issues. Return only the corrected Python code without any markdown formatting or explanations.",
-                model="gemini-2.5-flash",
+                model=DEV_MODEL,  # Use gemini-2.5-pro for higher quality code fixes
                 temperature=0.2
             )
             

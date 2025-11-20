@@ -1,0 +1,6 @@
+PLAN<ai_agent_study>|AI Agent Self-Study with Gemini & RAG|Develop a self-study AI agent leveraging Gemini API, LangChain/LangGraph, and RAG with ChromaDB for knowledge retrieval.
+TASK<001>|Setup Project & Gemini API|Initialize Python project, install LangChain, LangGraph, ChromaDB, and configure Gemini API key.|1|[]|3.0|simple|dev_agent
+TASK<002>|Ingest Study Material to ChromaDB|Prepare sample study documents, create text chunks, generate embeddings, and store them in ChromaDB.|2|[001]|5.0|medium|dev_agent
+TASK<003>|Develop Core RAG Logic|Implement a basic Retrieval-Augmented Generation chain using LangChain to retrieve context from ChromaDB and generate responses with Gemini.|3|[001,002]|6.0|medium|dev_agent
+TASK<004>|Create LangGraph Self-Study Agent|Design and implement a multi-step agent using LangGraph to orchestrate RAG, user interaction, and potentially self-correction for study.|4|[003]|8.0|complex|dev_agent
+TASK<005>|Test & Refine AI Agent Performance|Develop test cases for RAG retrieval accuracy and agent reasoning. Evaluate responses and fine-tune prompts/agent logic.|5|[004]|7.0|medium|qa_agent

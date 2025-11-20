@@ -1,0 +1,6 @@
+PLAN<slg001>|Snake Ladder Game Development|Develop a console-based or simple GUI Snake and Ladder game.
+TASK<001>|Project Setup & Board Definition|Initialize project, define game board structure (squares, snakes, ladders positions).|1|[]|3.0|simple|dev_agent
+TASK<002>|Player & Dice Mechanics|Implement player objects, dice roll function, and player movement on the board.|2|[001]|4.0|medium|dev_agent
+TASK<003>|Snake & Ladder Logic|Add logic for players landing on snake heads (move down) or ladder bottoms (move up).|3|[002]|5.0|medium|dev_agent
+TASK<004>|Game Loop & Win Condition|Develop the main game loop, turn management, and implement the win condition check.|4|[003]|6.0|medium|dev_agent
+TASK<005>|Functional Testing & Bug Fixing|Perform comprehensive testing of all game mechanics, identify and fix bugs.|5|[004]|7.0|medium|qa_agent

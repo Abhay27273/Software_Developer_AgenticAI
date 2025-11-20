@@ -1,0 +1,6 @@
+PLAN<chirpapp1>|ChirpFeed MVP|Minimum Viable Product for a Twitter-like social media app
+TASK<001>|Setup Backend Infrastructure|Initialize FastAPI project, configure PostgreSQL database, and ORM|1|[]|4.0|medium|dev_agent
+TASK<002>|Implement User Auth & Profiles|Develop user registration, login (JWT), and profile management endpoints|2|[001]|6.0|complex|dev_agent
+TASK<003>|Develop Chirp Functionality|Implement API endpoints for creating, reading (user feed), and deleting chirps|3|[002]|7.0|complex|dev_agent
+TASK<004>|Write API Tests|Create comprehensive pytest unit and integration tests for all backend endpoints|4|[003]|5.0|medium|qa_agent
+TASK<005>|Develop Basic Frontend UI|Create a simple web UI using a modern framework to interact with backend APIs|5|[003]|8.0|medium|dev_agent

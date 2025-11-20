@@ -1,0 +1,7 @@
+PLAN<game001>|Mario-like Game MVP|Develop a basic 2D platformer inspired by Super Mario with core mechanics
+TASK<001>|Engine Setup & Core Project|Initialize a new game project, configure physics and input system|1|[]|4.0|simple|dev_agent
+TASK<002>|Player Character Controls|Implement player movement (walk, run, jump) and basic animations|2|[001]|6.0|medium|dev_agent
+TASK<003>|First Level Design & Assets|Create a basic level layout with platforms, tiles, and background elements|3|[002]|5.0|medium|dev_agent
+TASK<004>|Enemy AI & Interaction|Develop a simple enemy (e.g., walking patrol) with player collision logic|4|[003]|7.0|complex|dev_agent
+TASK<005>|Game Mechanics & UI|Implement coin collection, scoring, health system, and basic HUD elements|5|[004]|8.0|complex|dev_agent
+TASK<006>|Feature Playtesting & QA|Thoroughly test all implemented game features, identify bugs and balance issues|6|[005]|6.5|medium|qa_agent

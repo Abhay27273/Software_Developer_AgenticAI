@@ -263,7 +263,15 @@ class EnhancedPipelineManager(PipelineManager):
     
     async def _handle_qa_passed(self, event: Event):
         """Handle QA pass - route to deploy."""
-        logger.info(f"✅ QA passed: {event.task_id}, routing to deploy")
+        # Check QA status from metadata
+        qa_confidence = event.payload.get('metadata', {}).get('qa_confidence', 1.0)
+        qa_issues = event.payload.get('metadata', {}).get('qa_issues', [])
+        
+        if qa_confidence >= 0.8:
+            logger.info(f"✅ QA passed: {event.task_id} (confidence: {qa_confidence:.2f}), routing to deploy")
+        else:
+            logger.warning(f"⚠️  QA flagged: {event.task_id} (confidence: {qa_confidence:.2f}), deploying with warnings")
+            logger.warning(f"   Issues found: {len(qa_issues)}")
         
         # Create deploy task
         deploy_task = QueueTask(
@@ -276,35 +284,65 @@ class EnhancedPipelineManager(PipelineManager):
         await self.deploy_queue.put(deploy_task)
     
     async def _handle_qa_failed(self, event: Event):
-        """Handle QA failure - route to fix."""
-        logger.warning(f"❌ QA failed: {event.task_id}, routing to fix")
+        """Handle QA failure - route to fix ONCE, then directly to deploy."""
+        logger.warning(f"❌ QA failed: {event.task_id}, routing to Dev for one-time fix")
         
-        # Create fix task (higher priority - RETRY)
-        fix_task = QueueTask(
-            task_id=f"fix_{event.task_id}",
-            task_type="fix",
-            payload=event.payload,
-            priority=TaskPriority.RETRY.value  # Fixes have higher priority
-        )
+        # Check if this has already been fixed once
+        payload = event.payload
+        fix_attempt_count = payload.get('fix_attempt_count', 0)
         
-        await self.unified_queue.put(fix_task)  # Use unified queue
+        if fix_attempt_count >= 1:
+            # Already fixed once - send directly to deploy with warnings
+            logger.warning(
+                f"⚠️  {event.task_id} already fixed once, "
+                f"bypassing retest and sending to deploy with known issues"
+            )
+            deploy_task = QueueTask(
+                task_id=f"deploy_{event.task_id}_with_issues",
+                task_type="deploy",
+                payload={
+                    **payload,
+                    'has_known_issues': True,
+                    'qa_status': 'failed_after_fix'
+                },
+                priority=TaskPriority.LOW.value  # Lower priority for problematic files
+            )
+            await self.deploy_queue.put(deploy_task)
+        else:
+            # First QA failure - request one-time fix from Dev
+            logger.info(f"🔧 Requesting Dev fix for {event.task_id} (attempt 1/1)")
+            fix_task = QueueTask(
+                task_id=f"fix_{event.task_id}",
+                task_type="fix",
+                payload={
+                    **payload,
+                    'fix_attempt_count': fix_attempt_count + 1,
+                    'is_final_fix': True  # Indicate this is the only fix attempt
+                },
+                priority=TaskPriority.RETRY.value  # Fixes have higher priority
+            )
+            await self.unified_queue.put(fix_task)  # Use unified queue
     
     async def _handle_fix_completed(self, event: Event):
-        """Handle fix completion - route back to QA for retest."""
-        logger.info(f"🔧 Fix completed: {event.task_id}, routing to QA for retest")
-        
-        # Create retest QA task
-        qa_task = QueueTask(
-            task_id=f"qa_retest_{event.task_id}",
-            task_type="qa",
-            payload={
-                **event.payload,
-                'is_retest': True
-            },
-            priority=TaskPriority.RETRY.value
+        """Handle fix completion - send DIRECTLY to deploy without retesting."""
+        logger.info(
+            f"🔧 Fix completed: {event.task_id}, "
+            f"sending directly to deploy (skipping retest)"
         )
         
-        await self.qa_queue.put(qa_task)
+        # Send directly to deploy without QA retest
+        deploy_task = QueueTask(
+            task_id=f"deploy_{event.task_id}_fixed",
+            task_type="deploy",
+            payload={
+                **event.payload,
+                'was_fixed': True,
+                'skip_qa_retest': True
+            },
+            priority=TaskPriority.NORMAL.value
+        )
+        
+        await self.deploy_queue.put(deploy_task)
     
     async def _handle_deploy_ready(self, event: Event):
         """Handle deploy ready event."""
@@ -364,13 +402,21 @@ class EnhancedPipelineManager(PipelineManager):
                 result = await self._call_dev_agent_with_breaker(task)
             
             if result:
+                # Extract result data - execute_task returns Task object
+                from models.task import Task
+                if isinstance(result, Task):
+                    # Task completed successfully - convert to dict for QA
+                    result_data = result.to_dict()
+                else:
+                    result_data = result
+                
                 # Emit event for routing
                 event = Event(
                     event_type=EventType.FILE_COMPLETED,
                     task_id=task.task_id,
                     payload={
                         **payload,
-                        'dev_result': result
+                        'dev_result': result_data
                     },
                     timestamp=datetime.now()
                 )
@@ -378,10 +424,12 @@ class EnhancedPipelineManager(PipelineManager):
             
             return None  # Routing via events
             
-        except CircuitBreakerOpenError:
-            logger.error(
-                f"🔴 Circuit breaker OPEN for dev task {task.task_id} - skipping"
+        except CircuitBreakerOpenError as cbe:
+            logger.warning(
+                f"⚠️  Circuit breaker OPEN for dev task {task.task_id} - "
+                f"will retry after timeout. Task will be requeued."
             )
+            # Let the task queue's retry mechanism handle it
             raise
         except Exception as e:
             logger.error(
@@ -447,8 +495,12 @@ class EnhancedPipelineManager(PipelineManager):
         Returns:
             Dev agent result
         """
+        from models.task import Task
+        from models.enums import TaskStatus
+        from datetime import datetime
+        
         payload = task.payload
-        subtask = payload.get("subtask")
+        subtask_dict = payload.get("subtask")
         websocket = payload.get("websocket")
         project_desc = payload.get("project_desc")
         plan = payload.get("plan")
@@ -456,42 +508,53 @@ class EnhancedPipelineManager(PipelineManager):
         if not self.dev_agent:
             raise ValueError("Dev agent not set")
         
-        # Call through circuit breaker
-        if self.dev_breaker:
+        # Convert dict to Task object for execute_task (both dev and fix)
+        if isinstance(subtask_dict, dict):
+            # Get metadata and add fix context if needed
+            metadata = dict(subtask_dict.get('metadata') or {})
+            plan = payload.get("plan")
+            if isinstance(plan, dict):
+                plan_id = plan.get('id') or plan.get('plan_id')
+                if plan_id and metadata.get('plan_id') is None:
+                    metadata['plan_id'] = plan_id
             if is_fix:
-                result = await self.dev_breaker.call(
-                    self.dev_agent.fix_code,
-                    subtask=subtask,
-                    original_code=payload.get("code"),
-                    qa_feedback=payload.get("qa_result"),
-                    websocket=websocket,
-                    project_desc=project_desc
-                )
-            else:
-                result = await self.dev_breaker.call(
-                    self.dev_agent.execute_task,
-                    subtask=subtask,
-                    websocket=websocket,
-                    project_desc=project_desc,
-                    plan=plan
-                )
+                metadata['is_fix_attempt'] = True
+                metadata['original_code'] = payload.get("code")
+                metadata['qa_feedback'] = payload.get("qa_result")
+            
+            # Create Task object from dict
+            description = subtask_dict.get('description', '')
+            if is_fix:
+                qa_issues = payload.get('qa_result', {}).get('issues_found', [])
+                description = f"FIX: {description}\n\nQA Feedback: {len(qa_issues)} issues found. See metadata for details."
+            
+            task_obj = Task(
+                id=subtask_dict.get('id', task.task_id),
+                title=subtask_dict.get('title', 'Development Task'),
+                description=description,
+                priority=subtask_dict.get('priority', 5),
+                status=TaskStatus.PENDING,
+                dependencies=subtask_dict.get('dependencies', []),
+                estimated_hours=subtask_dict.get('estimated_hours'),
+                complexity=subtask_dict.get('complexity'),
+                agent_type=subtask_dict.get('agent_type', 'dev_agent'),
+                created_at=datetime.now(),
+                metadata=metadata
+            )
+        else:
+            task_obj = subtask_dict
+        
+        # Call through circuit breaker (both dev and fix use execute_task)
+        if self.dev_breaker:
+            result = await self.dev_breaker.call(
+                self.dev_agent.execute_task,
+                task=task_obj
+            )
         else:
             # No circuit breaker - call directly
-            if is_fix:
-                result = await self.dev_agent.fix_code(
-                    subtask=subtask,
-                    original_code=payload.get("code"),
-                    qa_feedback=payload.get("qa_result"),
-                    websocket=websocket,
-                    project_desc=project_desc
-                )
-            else:
-                result = await self.dev_agent.execute_task(
-                    subtask=subtask,
-                    websocket=websocket,
-                    project_desc=project_desc,
-                    plan=plan
-                )
+            result = await self.dev_agent.execute_task(
+                task=task_obj
+            )
         
         return result
     
@@ -517,31 +580,65 @@ class EnhancedPipelineManager(PipelineManager):
             if not self.qa_agent:
                 raise ValueError("QA agent not set")
             
+            # Convert subtask dict to Task object (same as DevAgent)
+            from models.task import Task
+            from models.enums import TaskStatus
+            
+            subtask_dict = subtask if isinstance(subtask, dict) else subtask.to_dict()
+
+            metadata = dict(subtask_dict.get('metadata') or {})
+            plan = payload.get("plan")
+            if isinstance(plan, dict):
+                plan_id = plan.get('id') or plan.get('plan_id')
+                if plan_id and metadata.get('plan_id') is None:
+                    metadata['plan_id'] = plan_id
+
+            # Add dev context for QA agent
+            metadata['dev_result'] = dev_result
+            metadata['project_desc'] = project_desc
+
+            task_obj = Task(
+                id=subtask_dict.get('id', f"task_{task.task_id}"),
+                title=subtask_dict.get('title', ''),
+                description=subtask_dict.get('description', ''),
+                priority=subtask_dict.get('priority', 5),
+                status=TaskStatus.PENDING,
+                dependencies=subtask_dict.get('dependencies', []),
+                estimated_hours=subtask_dict.get('estimated_hours'),
+                complexity=subtask_dict.get('complexity'),
+                agent_type=subtask_dict.get('agent_type', 'qa_agent'),
+                metadata=metadata
+            )
+            
             # Call through circuit breaker
             if self.qa_breaker:
-                qa_result = await self.qa_breaker.call(
-                    self.qa_agent.test_code,
-                    subtask=subtask,
-                    code=dev_result,
-                    websocket=websocket,
-                    project_desc=project_desc
+                result_task = await self.qa_breaker.call(
+                    self.qa_agent.execute_task,
+                    task=task_obj
                 )
             else:
-                qa_result = await self.qa_agent.test_code(
-                    subtask=subtask,
-                    code=dev_result,
-                    websocket=websocket,
-                    project_desc=project_desc
+                result_task = await self.qa_agent.execute_task(
+                    task=task_obj
                 )
             
-            # Emit event based on QA result
-            if qa_result.get("tests_passed", False):
+            # Convert Task result back to dict for pipeline
+            qa_result = result_task.to_dict() if hasattr(result_task, 'to_dict') else result_task
+            
+            # Emit event based on QA result (check task status)
+            tests_passed = (
+                result_task.status == TaskStatus.COMPLETED 
+                if hasattr(result_task, 'status') 
+                else qa_result.get("status") == "completed"
+            )
+            
+            if tests_passed:
                 event = Event(
                     event_type=EventType.QA_PASSED,
                     task_id=task.task_id,
                     payload={
                         **payload,
-                        'qa_result': qa_result
+                        'qa_result': qa_result,
+                        'metadata': result_task.metadata if hasattr(result_task, 'metadata') else {}
                     },
                     timestamp=datetime.now()
                 )
@@ -551,7 +648,8 @@ class EnhancedPipelineManager(PipelineManager):
                     task_id=task.task_id,
                     payload={
                         **payload,
-                        'qa_result': qa_result
+                        'qa_result': qa_result,
+                        'metadata': result_task.metadata if hasattr(result_task, 'metadata') else {}
                     },
                     timestamp=datetime.now()
                 )
@@ -560,10 +658,12 @@ class EnhancedPipelineManager(PipelineManager):
             
             return None  # Routing via events
             
-        except CircuitBreakerOpenError:
-            logger.error(
-                f"🔴 Circuit breaker OPEN for QA task {task.task_id} - skipping"
+        except CircuitBreakerOpenError as cbe:
+            logger.warning(
+                f"⚠️  Circuit breaker OPEN for QA task {task.task_id} - "
+                f"will retry after timeout. Task will be requeued."
             )
+            # Let the task queue's retry mechanism handle it
             raise
         except Exception as e:
             logger.error(
@@ -584,28 +684,78 @@ class EnhancedPipelineManager(PipelineManager):
             
             payload = task.payload
             subtask = payload.get("subtask")
-            code = payload.get("code", payload.get("dev_result"))
             qa_result = payload.get("qa_result")
             websocket = payload.get("websocket")
-            
+            plan = payload.get("plan")
+
             if not self.ops_agent:
                 raise ValueError("Ops agent not set")
-            
-            # Call through circuit breaker
+
+            from models.task import Task
+            from models.enums import TaskStatus
+
+            subtask_dict = subtask if isinstance(subtask, dict) else subtask.to_dict()
+
+            metadata = dict(subtask_dict.get('metadata') or {})
+
+            # Ensure plan metadata is available for Ops agent
+            if isinstance(plan, dict):
+                plan_id = plan.get('id') or plan.get('plan_id')
+                if plan_id and metadata.get('plan_id') is None:
+                    metadata['plan_id'] = plan_id
+
+            if qa_result is not None:
+                metadata['qa_result'] = qa_result
+
+            qa_payload_meta = payload.get('metadata') or {}
+            if isinstance(qa_payload_meta, dict):
+                for key in ('qa_confidence', 'qa_mode', 'qa_issues'):
+                    if key in qa_payload_meta and metadata.get(key) is None:
+                        metadata[key] = qa_payload_meta[key]
+                if not metadata.get('plan_id'):
+                    plan_id = qa_payload_meta.get('plan_id')
+                    if plan_id:
+                        metadata['plan_id'] = plan_id
+
+            metadata['deployment_context'] = {
+                'was_fixed': payload.get('was_fixed', False),
+                'skip_qa_retest': payload.get('skip_qa_retest', False),
+                'has_known_issues': payload.get('has_known_issues', False),
+                'qa_status': payload.get('qa_status', 'passed')
+            }
+
+            description = subtask_dict.get('description', '')
+            if payload.get('was_fixed'):
+                description = f"DEPLOY FIX: {description}"
+            elif payload.get('has_known_issues'):
+                description = f"DEPLOY WITH WARNINGS: {description}"
+
+            default_priority = subtask_dict.get('priority')
+            if default_priority is None:
+                default_priority = TaskPriority.NORMAL.value
+
+            deploy_task_obj = Task(
+                id=subtask_dict.get('id', f"deploy_{task.task_id}"),
+                title=subtask_dict.get('title', 'Deployment Task'),
+                description=description,
+                priority=default_priority,
+                status=TaskStatus.PENDING,
+                dependencies=subtask_dict.get('dependencies', []),
+                estimated_hours=subtask_dict.get('estimated_hours'),
+                complexity=subtask_dict.get('complexity'),
+                agent_type='ops_agent',
+                metadata=metadata
+            )
+
+            # Call through circuit breaker using ops agent execute_task
             if self.ops_breaker:
                 await self.ops_breaker.call(
-                    self.ops_agent.deploy_code,
-                    subtask=subtask,
-                    code=code,
-                    qa_result=qa_result,
-                    websocket=websocket
+                    self.ops_agent.execute_task,
+                    task=deploy_task_obj
                 )
             else:
-                await self.ops_agent.deploy_code(
-                    subtask=subtask,
-                    code=code,
-                    qa_result=qa_result,
-                    websocket=websocket
+                await self.ops_agent.execute_task(
+                    task=deploy_task_obj
                 )
             
             self.completed_tasks += 1
@@ -615,10 +765,12 @@ class EnhancedPipelineManager(PipelineManager):
                 f"(total: {self.completed_tasks})"
             )
             
-        except CircuitBreakerOpenError:
-            logger.error(
-                f"🔴 Circuit breaker OPEN for deploy task {task.task_id} - skipping"
+        except CircuitBreakerOpenError as cbe:
+            logger.warning(
+                f"⚠️  Circuit breaker OPEN for deploy task {task.task_id} - "
+                f"will retry after timeout. Task will be requeued."
             )
+            # Let the task queue's retry mechanism handle it
             raise
         except Exception as e:
             logger.error(

@@ -1,0 +1,38 @@
+{
+  "id": "microservice-observability",
+  "name": "Microservice with Observability",
+  "description": "Single microservice with health checks, metrics, logging, and tracing",
+  "category": "microservice",
+  "files": {
+    "main.py": "from fastapi import FastAPI, Request\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom prometheus_client import Counter, Histogram, generate_latest\nfrom fastapi.responses import Response\nimport time\nimport logging\n\n# Configure logging\nlogging.basicConfig(\n    level=logging.INFO,\n    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'\n)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI(title=\"{{service_name}}\", version=\"1.0.0\")\n\n# Prometheus metrics\nrequest_count = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])\nrequest_duration = Histogram('http_request_duration_seconds', 'HTTP request duration', ['method', 'endpoint'])\n\n@app.middleware(\"http\")\nasync def metrics_middleware(request: Request, call_next):\n    \"\"\"Collect metrics for each request\"\"\"\n    start_time = time.time()\n    \n    response = await call_next(request)\n    \n    duration = time.time() - start_time\n    request_count.labels(\n        method=request.method,\n        endpoint=request.url.path,\n        status=response.status_code\n    ).inc()\n    request_duration.labels(\n        method=request.method,\n        endpoint=request.url.path\n    ).observe(duration)\n    \n    return response\n\n@app.get(\"/health\")\nasync def health_check():\n    \"\"\"Health check endpoint\"\"\"\n    return {\n        \"status\": \"healthy\",\n        \"service\": \"{{service_name}}\",\n        \"version\": \"1.0.0\"\n    }\n\n@app.get(\"/metrics\")\nasync def metrics():\n    \"\"\"Prometheus metrics endpoint\"\"\"\n    return Response(content=generate_latest(), media_type=\"text/plain\")\n\n@app.get(\"/api/{{service_name}}\")\nasync def get_data():\n    \"\"\"Main service endpoint\"\"\"\n    logger.info(\"Processing request for {{service_name}}\")\n    return {\n        \"service\": \"{{service_name}}\",\n        \"message\": \"Service is running\",\n        \"data\": []\n    }\n\n@app.post(\"/api/{{service_name}}\")\nasync def create_data(data: dict):\n    \"\"\"Create endpoint\"\"\"\n    logger.info(f\"Creating data: {data}\")\n    return {\n        \"status\": \"created\",\n        \"data\": data\n    }\n\nif __name__ == \"__main__\":\n    import uvicorn\n    uvicorn.run(app, host=\"0.0.0.0\", port=8000)\n",
+    "requirements.txt": "fastapi==0.104.1\nuvicorn[standard]==0.24.0\nprometheus-client==0.19.0\n",
+    "Dockerfile": "FROM python:3.11-slim\n\nWORKDIR /app\n\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\n\nCOPY . .\n\nEXPOSE 8000\n\nCMD [\"uvicorn\", \"main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]\n",
+    "docker-compose.yml": "version: '3.8'\n\nservices:\n  {{service_name}}:\n    build: .\n    ports:\n      - \"8000:8000\"\n    environment:\n      - SERVICE_NAME={{service_name}}\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:8000/health\"]\n      interval: 30s\n      timeout: 10s\n      retries: 3\n  \n  prometheus:\n    image: prom/prometheus:latest\n    ports:\n      - \"9090:9090\"\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml\n    command:\n      - '--config.file=/etc/prometheus/prometheus.yml'\n",
+    "prometheus.yml": "global:\n  scrape_interval: 15s\n\nscrape_configs:\n  - job_name: '{{service_name}}'\n    static_configs:\n      - targets: ['{{service_name}}:8000']\n",
+    "README.md": "# {{service_name}}\n\n{{service_description}}\n\n## Features\n\n- RESTful API endpoints\n- Health check endpoint\n- Prometheus metrics\n- Structured logging\n- Docker containerization\n- Docker Compose for local development\n\n## Setup\n\n### Local Development\n\n1. Install dependencies:\n```bash\npip install -r requirements.txt\n```\n\n2. Run the service:\n```bash\npython main.py\n```\n\n### Docker\n\n1. Build and run with Docker Compose:\n```bash\ndocker-compose up --build\n```\n\nThe service will be available at:\n- API: http://localhost:8000\n- Health: http://localhost:8000/health\n- Metrics: http://localhost:8000/metrics\n- Prometheus: http://localhost:9090\n\n## Observability\n\n### Health Checks\n- Endpoint: `GET /health`\n- Returns service status and version\n\n### Metrics\n- Endpoint: `GET /metrics`\n- Prometheus format metrics\n- Tracks request count, duration, status codes\n\n### Logging\n- Structured JSON logging\n- Request/response logging\n- Error tracking\n\n## API Endpoints\n\n- `GET /health` - Health check\n- `GET /metrics` - Prometheus metrics\n- `GET /api/{{service_name}}` - Get data\n- `POST /api/{{service_name}}` - Create data\n"
+  },
+  "required_vars": [
+    "service_name"
+  ],
+  "optional_vars": [
+    "service_description"
+  ],
+  "tech_stack": [
+    "FastAPI",
+    "Prometheus",
+    "Docker",
+    "Docker Compose"
+  ],
+  "estimated_setup_time": 15,
+  "complexity": "simple",
+  "created_at": "2025-11-18T09:39:45.491493",
+  "updated_at": "2025-11-18T09:39:45.491493",
+  "author": "system",
+  "version": "1.0.0",
+  "tags": [
+    "microservice",
+    "observability",
+    "prometheus",
+    "docker"
+  ]
+}

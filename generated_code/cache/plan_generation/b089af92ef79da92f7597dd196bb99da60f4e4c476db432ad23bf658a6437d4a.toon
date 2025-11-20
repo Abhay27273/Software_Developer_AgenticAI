@@ -1,0 +1,7 @@
+PLAN<stream001>|YouTube-like Streaming App MVP|Develop a minimum viable product for a video streaming platform
+TASK<001>|Initialize Backend Services|Setup FastAPI project, PostgreSQL database, and basic user authentication module.|1|[]|5.0|medium|dev_agent
+TASK<002>|Implement Video Upload API|Develop API endpoint for users to upload video files and store metadata in the database.|2|[001]|7.0|medium|dev_agent
+TASK<003>|Integrate Video Transcoding|Set up a background service to process uploaded videos into various streaming formats and resolutions.|3|[002]|8.0|complex|dev_agent
+TASK<004>|Develop Basic Video Player UI|Create a simple web interface to display a list of videos and integrate a video player for playback.|4|[003]|6.0|medium|dev_agent
+TASK<005>|Conduct E2E System Tests|Write and execute comprehensive end-to-end tests covering video upload, transcoding, and playback workflows.|5|[004]|5.0|medium|qa_agent
+TASK<006>|Prepare Docker Deployment|Create Dockerfiles for all services and configure docker-compose for local development and production deployment.|6|[004]|4.0|medium|ops_agent

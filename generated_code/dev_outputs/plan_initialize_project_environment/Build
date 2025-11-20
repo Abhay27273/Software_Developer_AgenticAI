@@ -1,3 +1,0 @@
-This method will set up and run the backend, frontend, and a PostgreSQL database in isolated Docker containers.
-
-1.  **Build Docker Images**: From the project root directory:

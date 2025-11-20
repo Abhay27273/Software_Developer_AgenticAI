@@ -72,15 +72,36 @@
         }
         /* --- Left Sidebar --- */
         .left-sidebar {
-            width: 280px;
+            width: 220px; /* Reduced from 280px to 220px */
+            min-width: 180px; /* Minimum width when resizing */
+            max-width: 400px; /* Maximum width when resizing */
             background-color: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
-            padding: 20px;
+            padding: 16px; /* Reduced padding from 20px */
             display: flex;
             flex-direction: column;
-            gap: 25px;
+            gap: 20px; /* Reduced from 25px */
             overflow-y: auto; /* Allow sidebar content to scroll */
             flex-shrink: 0;
+            position: relative; /* For resize handle positioning */
+        }
+        /* Resize Handle for Sidebar */
+        .sidebar-resize-handle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            cursor: col-resize;
+            background-color: transparent;
+            transition: background-color 0.2s;
+            z-index: 10;
+        }
+        .sidebar-resize-handle:hover {
+            background-color: var(--accent-color);
+        }
+        .sidebar-resize-handle.resizing {
+            background-color: var(--accent-color);
         }
         .sidebar-header {
             font-size: 20px;
@@ -110,6 +131,63 @@
             margin-bottom: 15px;
             text-transform: uppercase;
             letter-spacing: 0.8px;
+        }
+        .sidebar-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .sidebar-section-header h3 {
+            margin-bottom: 0;
+        }
+        .icon-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .icon-btn:hover {
+            background: var(--button-bg-secondary);
+            color: var(--text-primary);
+        }
+        .archived-projects-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .archived-project-item {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .archived-project-item:hover {
+            background: var(--button-bg-secondary);
+            border-color: var(--accent-color);
+        }
+        .archived-project-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .archived-project-date {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .archived-project-files {
+            padding-left: 16px;
+            margin-top: 8px;
+            display: none;
+        }
+        .archived-project-item.expanded .archived-project-files {
+            display: block;
         }
         .session-list, .file-tree {
             display: flex;
@@ -236,27 +314,42 @@
         }
         /* --- Main Content (Chatbot Area & File Viewer Container) --- */
         .main-content {
-            flex: 1;
+            flex: 1; /* Takes all available space in app-container */
             display: flex; /* Make it a flex container */
             flex-direction: column; /* Stack children vertically */
             background-color: var(--main-bg);
-            padding: 30px 50px 20px 50px; /* Adjusted padding: top, right, bottom (less), left */
+            padding: 20px 30px 0 30px; /* Restore top padding */
             overflow: hidden; /* Main content itself should not scroll */
+            min-height: 0; /* Allow flex child to shrink */
+            position: relative; /* Enable absolute positioning for input area adjustments */
         }
         /* Content Area for Chat/Agent/File Viewer */
         .content-area {
-            flex: 1; /* Takes all available vertical space */
+            flex: 1; /* Takes all available vertical space above input area */
             display: flex; /* Default to column for single view */
             flex-direction: column;
             overflow-y: auto; /* Allow this area to scroll */
             position: relative; /* For absolute positioning of sub-panels if needed */
+            min-height: 0; /* Critical for flex child height calculation */
+            align-self: stretch; /* CRITICAL: Force to stretch to full width and height */
         }
         /* Split view styles for content-area */
         .content-area.split-active {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* Two equal columns */
-            gap: 30px; /* Space between chat and file viewer */
-            overflow-y: hidden; /* Content area itself doesn't scroll, children do */
+            grid-template-columns: 400px 1fr; /* Chat: 400px fixed, Code: flexible (takes remaining space) */
+            grid-template-rows: 1fr; /* ✅ USE THIS INSTEAD */
+            height: 100%; /* ✅ ADD THIS */
+            gap: 24px; /* Space between chat and file viewer */
+            overflow: hidden; /* Grid manages its own scrolling */
+            padding-top: 0; /* Remove padding in split mode */
+            padding-bottom: 0; /* Allow code panel to reach bottom */
+            overflow-y: hidden; /* Prevent any scrolling on the grid itself */
+            align-items: stretch; /* CRITICAL: Force grid items to stretch vertically */
+        }
+        .content-area.split-active > * {
+            min-height: 0; /* Allow children to shrink within the grid cell */
+            height: 100%; /* Each grid cell child fills its cell completely */
+            max-height: 100%; /* Prevent overflow */
         }
         /* Hide welcome view in split mode */
         .content-area.split-active .welcome-view {
@@ -271,7 +364,9 @@
             max-width: none; /* Remove centering/max-width */
             margin: 0;
             padding: 0; /* Reset padding from default .main-content */
-            height: 100%; /* Take full height of grid cell */
+        }
+        .content-area.split-active .chat-panel {
+            padding-bottom: 140px; /* Reserve space for anchored input area */
         }
         /* File Viewer Panel in split view - this will be in the right column */
         .content-area.split-active .file-viewer-panel {
@@ -280,21 +375,20 @@
             flex-direction: column;
             padding: 0; /* Remove padding here, handled by main-content container */
             overflow-y: hidden; /* Content inside pre/code will scroll */
-            height: 100%; /* Take full height of grid cell */
-            border-left: 1px solid var(--border-color); /* Thin line separator */
-            padding-left: 30px; /* Space after the separator */
+            border-left: none; /* Remove border - gutter provides separation */
+            padding-left: 0; /* No extra padding */
         }
         /* Chat History - always scrollable within its panel */
         .chat-history {
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            max-width: 800px; /* Limit chat width in single view */
+            gap: 12px; /* Reduced from 20px to 12px */
+            max-width: 720px; /* Reduced from 800px to 720px */
             margin: 0 auto; /* Center chat content in single view */
             width: 100%;
-            padding-top: 20px; /* Padding above first message */
-            padding-bottom: 20px; /* Padding below last message */
+            padding-top: 16px; /* Reduced from 20px */
+            padding-bottom: 16px; /* Reduced from 20px */
             overflow-y: auto; /* Always scrollable */
         }
         /* Chat History in split view - remove max-width and margin auto */
@@ -302,6 +396,28 @@
             max-width: none;
             margin: 0;
             padding: 0; /* Reset internal padding if main-content has it */
+        }
+        
+        /* Input area should align with chat panel in split view */
+        .content-area.split-active ~ .input-area-container {
+            position: absolute;
+            left: 30px;
+            bottom: 20px;
+            padding: 0;
+            margin: 0;
+            width: 400px; /* Match chat column */
+            max-height: none;
+            z-index: 5;
+        }
+        .content-area.split-active ~ .input-area-container .input-wrapper {
+            max-width: none;
+            width: 100%;
+            margin: 0;
+            box-shadow: var(--shadow-medium);
+        }
+        .content-area.split-active ~ .input-area-container .agent-tabs {
+            max-width: none;
+            width: 100%;
         }
         /* Agent Output Panel */
         .agent-output-panel {
@@ -341,6 +457,14 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+        }
+        #pm-agent-output .pm-progress-bar {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: 14px;
+            margin-bottom: 12px;
+            box-shadow: var(--shadow-light);
         }
         #pm-agent-output .pm-task-item {
             background: #ffffff;
@@ -425,17 +549,153 @@
             background-color: rgba(0, 0, 0, 0.1);
             border-radius: 4px;
         }
+        
+        /* QA Agent Panel Styles */
+        .qa-section {
+            margin-bottom: 24px;
+        }
+        .qa-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+        .qa-test-results, .qa-activity-log {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: 14px;
+            box-shadow: var(--shadow-light);
+            min-height: 100px;
+        }
+        .qa-test-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid #ccc;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .qa-test-item.passed {
+            border-left-color: #0f7b45;
+            background: #e6f7ed;
+        }
+        .qa-test-item.failed {
+            border-left-color: #b71c1c;
+            background: #fdecea;
+        }
+        .qa-test-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .qa-test-file-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .qa-test-file-name:hover {
+            text-decoration: underline;
+            color: var(--primary-color);
+        }
+        .qa-test-status {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 999px;
+        }
+        .qa-test-status.passed {
+            background: #0f7b45;
+            color: white;
+        }
+        .qa-test-status.failed {
+            background: #b71c1c;
+            color: white;
+        }
+        .qa-test-details {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .qa-activity-log {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: var(--font-monospace);
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        /* Ops Agent Panel Styles */
+        .ops-section {
+            margin-bottom: 24px;
+        }
+        .ops-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+        .ops-deployment-status {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: 14px;
+            box-shadow: var(--shadow-light);
+        }
+        .ops-status-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f7f9fc;
+            border-radius: 6px;
+        }
+        .ops-status-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .ops-status-value {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        .ops-status-value a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .ops-status-value a:hover {
+            text-decoration: underline;
+        }
+        .ops-live-preview {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-light);
+        }
+        .ops-live-preview iframe {
+            width: 100%;
+            height: 500px;
+            border: none;
+        }
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 30px;
+            font-style: italic;
+        }
+        
         .chat-message {
             display: flex;
             align-items: flex-start;
-            gap: 15px;
-            padding: 15px;
+            gap: 12px; /* Reduced from 15px */
+            padding: 10px 14px; /* Reduced from 15px */
             border-radius: var(--border-radius-md);
             box-shadow: var(--shadow-light);
-            line-height: 1.6;
-            font-size: 15px;
+            line-height: 1.5; /* Reduced from 1.6 */
+            font-size: 14px; /* Reduced from 15px */
             white-space: pre-wrap; /* Preserve formatting */
             word-break: break-word; /* Break long words */
+            max-width: 85%; /* Limit message width like Claude */
         }
         .chat-message.user {
             background-color: var(--chat-user-bg);
@@ -451,8 +711,8 @@
             border: 1px solid var(--border-color); /* Subtle border for AI messages */
         }
         .chat-avatar {
-            width: 35px;
-            height: 35px;
+            width: 32px; /* Reduced from 35px */
+            height: 32px; /* Reduced from 35px */
             border-radius: 50%;
             background-color: var(--accent-color);
             color: white;
@@ -460,11 +720,62 @@
             justify-content: center;
             align-items: center;
             font-weight: 600;
-            font-size: 18px;
+            font-size: 16px; /* Reduced from 18px */
             flex-shrink: 0;
         }
         .chat-avatar.user { background-color: #6c757d; } /* Muted grey for user avatar */
         .chat-avatar.ai { background-color: var(--accent-color); } /* Accent for AI avatar */
+        
+        /* Chat messages in split view - make them more compact */
+        .content-area.split-active .chat-message {
+            max-width: 95%; /* Use more width in narrow column */
+            padding: 8px 12px; /* Even more compact */
+            font-size: 13px; /* Slightly smaller text */
+            gap: 10px;
+        }
+        .content-area.split-active .chat-avatar {
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+        }
+        .content-area.split-active .chat-history {
+            gap: 10px; /* Tighter spacing in split view */
+        }
+        
+        /* Clickable UI File Creation Message */
+        .ui-file-message {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+            padding: 16px 20px;
+            border-radius: 12px;
+            max-width: 90%;
+        }
+        .ui-file-message .view-ui-btn {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-top: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            font-size: 14px;
+        }
+        .ui-file-message .view-ui-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            background: #f0f0f0;
+        }
+        .ui-file-message strong {
+            font-size: 16px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
         /* Typing Indicator */
         .typing-indicator {
             display: flex;
@@ -495,38 +806,41 @@
             /* No longer absolutely positioned relative to main-content */
             position: static; /* Or simply remove position property */
             flex-shrink: 0; /* Prevents it from shrinking */
+            flex-grow: 0; /* CRITICAL: Prevents it from growing and stealing space */
             margin-top: auto; /* Pushes it to the bottom of the flex container */
-            padding: 20px 50px; /* Consistent padding */
+            padding: 16px 30px; /* Reduced from 20px 50px */
             background: var(--main-bg); /* Solid background for simpler layout */
             z-index: 10;
             border-top: 1px solid var(--border-color);
+            max-height: 250px; /* CRITICAL: Prevent input area from growing too much and stealing space from code panel */
+            overflow-y: auto; /* Allow scrolling if content exceeds max-height */
         }
         .input-wrapper {
-            max-width: 800px;
+            max-width: 720px; /* Reduced from 800px */
             margin: 0 auto;
             background: var(--sidebar-bg);
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
-            padding: 15px;
+            padding: 12px; /* Reduced from 15px */
             box-shadow: var(--shadow-medium);
             display: flex;
             flex-direction: column; /* Stack input and tabs */
-            gap: 10px;
+            gap: 8px; /* Reduced from 10px */
         }
         .input-top-row {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px; /* Reduced from 10px */
         }
         #requirements-input {
             flex: 1; /* Take remaining space */
             border: none;
-            padding: 10px;
-            font-size: 16px;
+            padding: 8px 10px; /* Adjusted padding */
+            font-size: 15px; /* Reduced from 16px */
             font-family: var(--font-primary);
             resize: none;
-            min-height: 50px; /* Adjusted min-height */
-            max-height: 150px; /* Limit max height for input */
+            min-height: 44px; /* Reduced from 50px */
+            max-height: 130px; /* Reduced from 150px */
             outline: none;
             background: transparent;
             color: var(--text-primary);
@@ -563,24 +877,24 @@
         }
         .agent-tabs {
             display: flex;
-            gap: 10px; /* Space between tabs */
+            gap: 8px; /* Reduced from 10px */
             flex-wrap: wrap; /* Allow tabs to wrap on smaller screens */
             justify-content: flex-start; /* Align tabs to the left */
-            margin-top: 5px; /* Small space above tabs */
+            margin-top: 4px; /* Reduced from 5px */
         }
         .agent-tab {
-            padding: 8px 18px; /* More horizontal padding */
+            padding: 6px 14px; /* Reduced from 8px 18px */
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-md);
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px; /* Reduced from 14px */
             font-weight: 500;
             transition: all 0.2s ease;
             background-color: var(--button-bg-secondary);
             color: var(--button-text-secondary);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px; /* Reduced from 6px */
         }
         .agent-tab:hover:not(.active):not(.disabled) {
             background-color: var(--button-hover-secondary);
@@ -610,44 +924,424 @@
         .agent-status-dot.running { background-color: var(--status-running); }
         .agent-status-dot.complete { background-color: var(--status-complete); }
         .agent-status-dot.error { background-color: var(--status-error); }
-        /* --- Gemini Canvas Style File Viewer --- */
+        /* --- Claude-Style Enhanced File Viewer Panel --- */
         .file-viewer-panel {
-            background: #f7fafd;
-            border-radius: 18px;
-            box-shadow: 0 2px 12px rgba(80,120,200,0.07);
-            padding: 0 0 24px 0;
-            margin-top: 12px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            flex: 1;
+            border: 1px solid #e5e7eb;
         }
-        .file-viewer-header {
-            background: #eaf1fb;
-            border-radius: 18px 18px 0 0;
-            padding: 18px 32px 10px 32px;
-            font-size: 18px;
+        
+        /* File Tabs Container */
+        .file-tabs-container {
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            overflow-x: auto;
+            flex-shrink: 0;
+            min-height: 40px;
+        }
+        .file-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-right: 1px solid #e5e7eb;
+            background: #f3f4f6;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            white-space: nowrap;
+            position: relative;
+            max-width: 220px;
+            min-width: 0;
+            flex-shrink: 1;
+        }
+        .file-tab.active {
+            background: #ffffff;
+            border-bottom: 2px solid #4a90e2;
+        }
+        .file-tab:hover {
+            background: #e5e7eb;
+        }
+        .file-tab-name {
+            font-family: var(--font-monospace);
+            font-size: 11px;
+            color: #374151;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-tab.active .file-tab-name {
+            color: #1f2937;
             font-weight: 600;
-            color: #2a3b4d;
+        }
+        .file-tab-close {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #9ca3af;
+            transition: all 0.2s;
+        }
+        .file-tab-close:hover {
+            background: #dc2626;
+            color: white;
+        }
+        .file-tab.unsaved::after {
+            content: '●';
+            color: #4a90e2;
+            margin-left: 4px;
+            font-size: 8px;
+        }
+        
+        /* Toolbar */
+        .file-viewer-header {
+            background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border-bottom: 1px solid #e3e8f0;
+            flex-shrink: 0;
+            gap: 12px;
+        }
+        .file-viewer-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+        #file-viewer-filename {
+            font-size: 11px;
+            font-weight: 600;
+            color: #374151;
+            font-family: var(--font-monospace);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-transform: none;
+            letter-spacing: 0.3px;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-type-badge {
+            font-size: 8px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #e0f2fe;
+            color: #0369a1;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .file-status-indicators {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+        .status-indicator.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        }
+        .status-indicator.disconnected .status-dot {
+            background: #ef4444;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+        }
+        .status-dot.unsaved {
+            background: #f59e0b;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+        }
+        .file-viewer-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .file-viewer-actions button {
+            background: transparent;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            color: #6b7280;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .file-viewer-actions button:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+            color: #374151;
+        }
+        .file-viewer-actions button:active {
+            transform: scale(0.95);
+        }
+        /* Highlight Copy and Close buttons */
+        #copy-file-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+        #copy-file-btn:hover {
+            background: #2563eb;
+        }
+        #close-file-viewer-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+        #close-file-viewer-btn:hover {
+            background: #dc2626;
+        }
+        .file-viewer-actions button.success {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+        .file-viewer-actions button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-run { color: #059669; border-color: #a7f3d0; }
+        .btn-run:hover { background: #d1fae5; }
+        .btn-save { color: #4a90e2; border-color: #bfdbfe; }
+        .btn-save:hover { background: #dbeafe; }
+        .btn-edit { color: #7c3aed; border-color: #ddd6fe; }
+        .btn-edit:hover { background: #ede9fe; }
+        .btn-preview { color: #ea580c; border-color: #fed7aa; }
+        .btn-preview:hover { background: #ffedd5; }
+        
+        /* Content Area with Split View for Preview */
+        .file-content-wrapper {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
         }
         .file-viewer-content {
-            background: #f7fafd;
-            border-radius: 0 0 18px 18px;
-            padding: 24px 32px;
-            min-height: 320px;
-            font-size: 15px;
-            color: #2a3b4d;
+            background: #ffffff;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            min-height: 0;
+        }
+        .file-viewer-content.edit-mode {
+            border: 2px solid #4a90e2;
+        }
+        .file-content-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: auto;
+            min-height: 0;
+        }
+        .file-content-display pre {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            position: relative;
+            height: 100%;
+            overflow: hidden; /* Hide overflow here */
+        }
+        .file-content-display pre > code {
+            flex: 1;
+            display: block;
+            min-height: 100%;
+            height: 100%;
+            overflow: auto; /* Scroll the code itself */
+        }
+        .live-preview-panel {
+            flex: 1;
+            background: #ffffff;
+            border-left: 1px solid #e5e7eb;
+            display: none;
+            overflow: hidden;
+        }
+        .live-preview-panel.visible {
+            display: flex;
+            flex-direction: column;
+        }
+        .live-preview-header {
+            background: #f9fafb;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .live-preview-iframe {
+            flex: 1;
+            border: none;
+            background: white;
+        }
+        
+        /* Resizable Divider */
+        .panel-resize-handle {
+            width: 4px;
+            background: #e5e7eb;
+            cursor: col-resize;
+            transition: background 0.2s;
+        }
+        .panel-resize-handle:hover,
+        .panel-resize-handle.dragging {
+            background: #4a90e2;
         }
         .file-viewer-content pre {
-            background: #eaf1fb;
-            border-radius: 10px;
-            padding: 18px;
-            font-size: 15px;
-            color: #1e293b;
-            box-shadow: 0 1px 4px rgba(80,120,200,0.04);
+            margin: 0;
+            padding: 0; /* Remove all padding, line numbers will provide spacing */
+            background: #ffffff;
+            border: none;
+            font-size: 13px;
+            line-height: 1.45;
+            overflow: auto;
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            align-items: stretch;
+            height: 100%;
+        }
+        .file-viewer-content pre.line-numbers {
+            padding-left: 0; /* REMOVED - Gutter is now positioned independently */
+            counter-reset: linenumber;
+            position: relative;
+            height: 100%;
+        }
+        .file-viewer-content pre.line-numbers > code {
+            counter-increment: linenumber;
+        }
+        .file-viewer-content pre.line-numbers .line-numbers-rows {
+            position: absolute;
+            pointer-events: none;
+            top: 0;
+            left: 0;
+            width: auto; /* Let it size to content */
+            min-width: 40px; /* Minimum width */
+            font-size: 12px;
+            letter-spacing: -0.5px;
+            border-right: 1px solid #e5e7eb; /* Standard separator line */
+            user-select: none;
+            text-align: right;
+            padding: 10px 8px 10px 14px; /* Match code padding */
+            color: #9ca3af;
+            line-height: 1.45;
+            height: 100%;
+            background: #f9fafb; /* Slight background for gutter area */
         }
         .file-viewer-content code {
-            font-family: var(--font-monospace);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+            font-size: 13px;
+            display: block;
+            flex: 1;
+            min-height: 100%;
+            line-height: 1.45;
+            padding: 10px 14px 10px 60px; /* Code content padding, with space for line numbers */
+        }
+        /* Prism.js theme adjustments for Claude-like look */
+        .file-viewer-content .token.comment {
+            color: #6a9955;
+            font-style: italic;
+        }
+        .file-viewer-content .token.keyword {
+            color: #0000ff;
+            font-weight: 600;
+        }
+        .file-viewer-content .token.string {
+            color: #a31515;
+        }
+        .file-viewer-content .token.function {
+            color: #795e26;
+        }
+        .file-viewer-content .token.class-name {
+            color: #267f99;
+        }
+        .file-viewer-content .token.number {
+            color: #098658;
+        }
+        .file-viewer-content .token.operator {
+            color: #000000;
+        }
+        /* File metadata bar */
+        .file-metadata {
+            padding: 12px 20px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #6b7280;
+            flex-shrink: 0;
+        }
+        .file-metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* Copy success feedback */
+        .file-viewer-actions button.copied {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+        /* Scrollbar styling for file viewer */
+        .file-viewer-content::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        .file-viewer-content::-webkit-scrollbar-track {
+            background: #f9fafb;
+        }
+        .file-viewer-content::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 6px;
+            border: 3px solid #f9fafb;
+        }
+        .file-viewer-content::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
         }
         /* Code Block Copy Button (inside chat messages) */
         .chat-message pre {
@@ -684,24 +1378,27 @@
             background-color: rgba(0,0,0,0.6);
         }
         /* Logs and Connection Status (Fixed position, ensure they are not duplicated in HTML) */
-        #connection-status {
+        #connection-status,
+        .connection-status {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
+            top: 16px;
+            right: 16px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
             font-weight: 500;
             z-index: 1000;
             box-shadow: var(--shadow-light);
             transition: background-color 0.3s, color 0.3s;
         }
-        #connection-status.connected {
+        #connection-status.connected,
+        .connection-status.connected {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        #connection-status.disconnected {
+        #connection-status.disconnected,
+        .connection-status.disconnected {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
@@ -810,7 +1507,22 @@
                 max-width: 600px;
             }
             .file-viewer-panel {
-                padding: 20px 30px;
+                border-radius: 8px;
+            }
+            .file-viewer-header {
+                padding: 12px 16px;
+            }
+            .file-viewer-content pre {
+                padding: 16px;
+                font-size: 12px;
+            }
+            .file-metadata {
+                padding: 10px 16px;
+                font-size: 11px;
+            }
+            .file-viewer-actions button {
+                padding: 5px 10px;
+                font-size: 12px;
             }
             #logs-container {
                 max-width: 300px;
@@ -822,7 +1534,18 @@
                 padding: 6px 12px;
             }
             .content-area.split-active {
-                grid-template-columns: 1fr; /* Stack columns on smaller tablets */
+                grid-template-columns: 320px 1fr; /* Narrower chat on tablets: 320px fixed */
+                gap: 16px;
+            }
+            .content-area.split-active ~ .input-area-container {
+                width: 320px;
+                left: 30px;
+                bottom: 15px;
+            }
+        }
+        @media (max-width: 900px) {
+            .content-area.split-active {
+                grid-template-columns: 1fr; /* Stack columns on smaller screens */
                 gap: 20px;
                 overflow-y: auto; /* Allow scrolling for stacked content */
             }
@@ -833,6 +1556,18 @@
                 max-height: 50vh; /* Limit height of each panel */
                 border-left: none; /* Remove border when stacked */
                 padding-left: 0; /* Remove padding when stacked */
+            }
+            .content-area.split-active .chat-panel {
+                padding-bottom: 0;
+            }
+            .content-area.split-active ~ .input-area-container {
+                position: static;
+                width: 100%;
+                padding: 15px 20px;
+                margin-top: 10px;
+            }
+            .content-area.split-active ~ .input-area-container .input-wrapper {
+                box-shadow: none;
             }
         }
         @media (max-width: 768px) {
@@ -885,7 +1620,32 @@
                 font-size: 16px;
             }
             .file-viewer-panel {
-                padding: 15px 20px;
+                border-radius: 8px;
+            }
+            .file-viewer-header {
+                padding: 10px 14px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .file-viewer-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+            .file-viewer-actions button {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            .file-viewer-content pre {
+                padding: 12px;
+                font-size: 11px;
+            }
+            .file-metadata {
+                padding: 8px 14px;
+                font-size: 10px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
             }
             #logs-container, #connection-status {
                 position: static;
@@ -908,6 +1668,9 @@
 <body>
     <div class="app-container">
         <aside class="left-sidebar">
+            <!-- Resize Handle -->
+            <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
+            
             <div class="sidebar-header">
                 <span class="logo-icon"><i class="fas fa-robot"></i></span> AI Agent
             </div>
@@ -916,7 +1679,12 @@
             <div id="connection-status" class="connection-status">Connecting...</div>
 
             <div class="sidebar-section">
-                <h3>Projects</h3>
+                <div class="sidebar-section-header">
+                    <h3>Projects</h3>
+                    <button id="download-all-btn" class="icon-btn" title="Download All Files">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
                 <div id="session-list" class="session-list">
                     <div class="session-item active">
                         <span class="icon-file"><i class="fas fa-project-diagram"></i></span>
@@ -928,10 +1696,23 @@
                 </div>
                 <button id="new-project-btn"><i class="fas fa-plus-circle"></i> New Project / Clear Chat</button>
             </div>
+            
             <div class="sidebar-section">
-                <h3>Generated Files</h3>
+                <h3>Current Project Files</h3>
                 <div id="file-tree" class="file-tree">
-                    <!-- File tree will be dynamically populated by JS -->
+                    <!-- Current project files will be dynamically populated -->
+                </div>
+            </div>
+            
+            <div class="sidebar-section" id="archived-projects-section" style="display: none;">
+                <div class="sidebar-section-header">
+                    <h3>Archived Projects</h3>
+                    <button id="toggle-archived-btn" class="icon-btn" title="Show/Hide Archived">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div id="archived-projects-list" class="archived-projects-list">
+                    <!-- Archived projects will be dynamically populated -->
                 </div>
             </div>
         </aside>
@@ -958,23 +1739,122 @@
                 <div id="agent-output-panel" class="agent-output-panel hidden">
                     <div id="pm-agent-output" class="agent-output-content"></div>
                     <div id="dev-agent-output" class="agent-output-content hidden"></div>
-                    <div id="qa-agent-output" class="agent-output-content hidden"></div>
-                </div>
-
-                <!-- File Viewer Panel (can be side-by-side or overlay) -->
-                <div id="file-viewer-panel" class="file-viewer-panel hidden">
-                    <div class="file-viewer-header">
-                        <span id="file-viewer-filename"></span>
-                        <div class="file-viewer-actions">
-                            <button id="copy-file-btn" title="Copy to Clipboard"><i class="far fa-copy"></i></button>
-                            <button id="download-file-btn" title="Download File"><i class="fas fa-download"></i></button>
-                            <button id="close-file-viewer-btn" title="Close Viewer"><i class="fas fa-times"></i></button>
+                    <div id="qa-agent-output" class="agent-output-content hidden">
+                        <div class="qa-section">
+                            <h3>📊 Test Results</h3>
+                            <div id="qa-test-results" class="qa-test-results">
+                                <div class="empty-state">No test results yet. QA Agent will display results here.</div>
+                            </div>
+                        </div>
+                        <div class="qa-section">
+                            <h3>📝 QA Activity Log</h3>
+                            <div id="qa-activity-log" class="qa-activity-log"></div>
                         </div>
                     </div>
-                    <div class="file-viewer-content">
-                        <pre class="line-numbers"><code id="file-content-display" class="language-javascript"></code></pre>
+                    <div id="ops-agent-output" class="agent-output-content hidden">
+                        <div class="ops-section">
+                            <h3>🚀 Deployment Status</h3>
+                            <div id="ops-deployment-status" class="ops-deployment-status">
+                                <div class="empty-state">No deployment yet. Ops Agent will show deployment details here.</div>
+                            </div>
+                        </div>
+                        <div class="ops-section">
+                            <h3>🌐 Live Preview</h3>
+                            <div id="ops-live-preview" class="ops-live-preview">
+                                <div class="empty-state">Live preview will appear here after deployment.</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Enhanced File Viewer Panel with Tabs, Preview, and Editing -->
+                <div id="file-viewer-panel" class="file-viewer-panel hidden">
+                    <!-- File Tabs -->
+                    <div class="file-tabs-container" id="file-tabs-container">
+                        <!-- Tabs will be dynamically added here -->
+                    </div>
+                    
+                    <!-- Enhanced Toolbar -->
+                        <div class="file-viewer-header">
+                        <div class="file-viewer-header-left">
+                            <span id="file-viewer-filename">NO FILE SELECTED</span>
+                            <span id="file-type-badge" class="file-type-badge">--</span>
+                            <div class="file-status-indicators">
+                                <div class="status-indicator hidden" id="unsaved-indicator">
+                                    <span class="status-dot unsaved"></span>
+                                    <span>Unsaved</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="file-viewer-actions">
+                            <button id="edit-file-btn" class="btn-edit" title="Toggle Edit Mode (Ctrl+E)">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button id="save-file-btn" class="btn-save" title="Save File (Ctrl+S)" disabled>
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <button id="run-file-btn" class="btn-run" title="Run Code">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                            <button id="preview-file-btn" class="btn-preview" title="Toggle Live Preview">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
+                            <button id="copy-file-btn" title="Copy to Clipboard">
+                                <i class="far fa-copy"></i> Copy
+                            </button>
+                            <button id="download-file-btn" title="Download File">
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                            <button id="expand-file-btn" title="Expand/Collapse">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <button id="close-file-viewer-btn" title="Close Viewer">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Content Area with Split for Live Preview -->
+                    <div class="file-content-wrapper">
+                        <div class="file-viewer-content" id="file-viewer-content">
+                            <div id="file-content-display" class="file-content-display"></div>
+                        </div>
+                        
+                        <!-- Live Preview Panel -->
+                        <div class="live-preview-panel" id="live-preview-panel">
+                            <div class="live-preview-header">
+                                <span>🔴 Live Preview</span>
+                                <button id="refresh-preview-btn" style="background: transparent; border: none; cursor: pointer; color: #6b7280;" title="Refresh Preview">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <iframe id="live-preview-iframe" class="live-preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+                        </div>
+                    </div>
+                    
+                    <!-- File Metadata Footer - HIDDEN for Claude-style clean view -->
+                    <div class="file-metadata" style="display: none;">
+                        <div class="file-metadata-item">
+                            <span>📏</span>
+                            <span id="file-size">--</span>
+                        </div>
+                        <div class="file-metadata-item">
+                            <span>🔤</span>
+                            <span id="file-lines">-- lines</span>
+                        </div>
+                        <div class="file-metadata-item">
+                            <span>💾</span>
+                            <span id="file-type">--</span>
+                        </div>
+                        <div class="file-metadata-item" id="edit-mode-indicator" style="display: none;">
+                            <span>✏️</span>
+                            <span>Edit Mode</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Resizable Divider (between chat and code) -->
+                <div id="panel-resize-handle" class="panel-resize-handle hidden"></div>
             </div> <!-- End of content-area -->
 
             <div class="input-area-container">
@@ -998,7 +1878,7 @@
                         <div class="agent-tab" data-agent="qa">
                             <span class="agent-status-dot" data-status-agent="qa"></span> QA Agent
                         </div>
-                        <div class="agent-tab disabled">
+                        <div class="agent-tab" data-agent="ops">
                             <span class="agent-status-dot" data-status-agent="ops"></span> Ops Agent
                         </div>
                     </div>
@@ -1080,13 +1960,25 @@
                 this.contentArea = document.querySelector('.content-area'); // New content area
                 this.welcomeView = document.getElementById('welcome-view');
                 this.chatPanel = document.getElementById('chat-panel');
-                this.chatHistoryContainer = document.getElementById('chat-history');
                 this.agentOutputPanel = document.getElementById('agent-output-panel');
                 this.fileViewerPanel = document.getElementById('file-viewer-panel');
+                this.chatHistoryContainer = document.getElementById('chat-history');
                 // Agent outputs (individual panels)
                 this.pmAgentOutput = document.getElementById('pm-agent-output');
                 this.devAgentOutput = document.getElementById('dev-agent-output');
                 this.qaAgentOutput = document.getElementById('qa-agent-output');
+                this.opsAgentOutput = document.getElementById('ops-agent-output');
+                
+                // QA Agent panel elements
+                this.qaTestResults = document.getElementById('qa-test-results');
+                this.qaActivityLog = document.getElementById('qa-activity-log');
+                this.qaTests = new Map(); // Track test results
+                
+                // Ops Agent panel elements
+                this.opsDeploymentStatus = document.getElementById('ops-deployment-status');
+                this.opsLivePreview = document.getElementById('ops-live-preview');
+                this.deploymentInfo = {}; // Track deployment information
+                
                 if (this.pmAgentOutput && (!this.pmTaskListElement || !this.pmAgentLogBody)) {
                     this.pmAgentOutput.innerHTML = '';
 
@@ -1114,9 +2006,30 @@
                 this.fileTree = document.getElementById('file-tree');
                 this.fileViewerFilename = document.getElementById('file-viewer-filename');
                 this.fileContentDisplay = document.getElementById('file-content-display');
+                this.fileViewerContent = document.getElementById('file-viewer-content');
                 this.closeFileViewerBtn = document.getElementById('close-file-viewer-btn');
                 this.downloadFileBtn = document.getElementById('download-file-btn');
                 this.copyFileBtn = document.getElementById('copy-file-btn');
+                
+                // Enhanced file viewer elements (tabs, edit, preview)
+                this.fileTabsContainer = document.getElementById('file-tabs-container');
+                this.editFileBtn = document.getElementById('edit-file-btn');
+                this.saveFileBtn = document.getElementById('save-file-btn');
+                this.runFileBtn = document.getElementById('run-file-btn');
+                this.previewFileBtn = document.getElementById('preview-file-btn');
+                this.expandFileBtn = document.getElementById('expand-file-btn');
+                this.livePreviewPanel = document.getElementById('live-preview-panel');
+                this.livePreviewIframe = document.getElementById('live-preview-iframe');
+                this.refreshPreviewBtn = document.getElementById('refresh-preview-btn');
+                this.fileTypeBadge = document.getElementById('file-type-badge');
+                this.unsavedIndicator = document.getElementById('unsaved-indicator');
+                this.editModeIndicator = document.getElementById('edit-mode-indicator');
+                
+                // File tabs state
+                this.openTabs = []; // Array of {path, name, content, isDirty, language}
+                this.activeTabIndex = -1;
+                this.isEditMode = false;
+                this.originalContent = '';
                 // Agent tabs
                 this.agentTabs = document.querySelectorAll('.agent-tab');
                 this.agentTabs.forEach(tab => {
@@ -1155,6 +2068,46 @@
                 }
                 // New Project button
                 this.newProjectBtn = document.getElementById('new-project-btn');
+                
+                // Sidebar resize functionality
+                this.sidebar = document.querySelector('.left-sidebar');
+                this.resizeHandle = document.getElementById('sidebar-resize-handle');
+                this.isResizing = false;
+                this.initializeSidebarResize();
+            }
+            
+            // Initialize sidebar resize functionality
+            initializeSidebarResize() {
+                if (!this.resizeHandle || !this.sidebar) return;
+                
+                this.resizeHandle.addEventListener('mousedown', (e) => {
+                    this.isResizing = true;
+                    this.resizeHandle.classList.add('resizing');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isResizing) return;
+                    
+                    const newWidth = e.clientX;
+                    const minWidth = parseInt(getComputedStyle(this.sidebar).minWidth);
+                    const maxWidth = parseInt(getComputedStyle(this.sidebar).maxWidth);
+                    
+                    if (newWidth >= minWidth && newWidth <= maxWidth) {
+                        this.sidebar.style.width = newWidth + 'px';
+                    }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    if (this.isResizing) {
+                        this.isResizing = false;
+                        this.resizeHandle.classList.remove('resizing');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                    }
+                });
             }
             // Displays a custom message box instead of alert()
             showMessage(message, isConfirm = false, onConfirm = null) {
@@ -1213,8 +2166,16 @@
             }
             // Adds a chat message to the history
             addChatMessage(content, sender) {
+                // Check if this is a UI file creation message
+                const isUIFile = this.detectUIFileCreation(content);
+                
                 const messageElement = document.createElement('div');
                 messageElement.classList.add('chat-message', sender);
+                
+                if (isUIFile) {
+                    messageElement.classList.add('ui-file-message');
+                }
+                
                 const avatarElement = document.createElement('div');
                 avatarElement.classList.add('chat-avatar', sender);
                 avatarElement.textContent = sender === 'user' ? 'You' : 'Akino';
@@ -1222,6 +2183,25 @@
                 contentElement.classList.add('chat-content');
                 // Use marked.parse for markdown rendering
                 contentElement.innerHTML = marked.parse(content);
+                
+                // Add "View UI" button for UI files
+                if (isUIFile && isUIFile.filePath) {
+                    const viewBtn = document.createElement('button');
+                    viewBtn.className = 'view-ui-btn';
+                    viewBtn.innerHTML = '🎨 View UI & Live Preview';
+                    viewBtn.onclick = () => {
+                        this.showFileContent(isUIFile.filePath);
+                        if (isUIFile.filePath.endsWith('.html') || isUIFile.filePath.endsWith('.htm')) {
+                            setTimeout(() => {
+                                if (this.activeTabIndex >= 0) {
+                                    this.toggleLivePreview();
+                                }
+                            }, 300);
+                        }
+                    };
+                    contentElement.appendChild(viewBtn);
+                }
+                
                 messageElement.appendChild(avatarElement);
                 messageElement.appendChild(contentElement);
                 this.chatHistoryContainer.appendChild(messageElement);
@@ -1230,12 +2210,44 @@
                 // Scroll to bottom
                 this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
             }
+            
+            /**
+             * Detect if a message is about UI file creation
+             */
+            detectUIFileCreation(content) {
+                const uiKeywords = ['index.html', 'ui', 'interface', 'frontend', 'webpage', 'dashboard'];
+                const lowerContent = content.toLowerCase();
+                
+                // Check if message mentions UI or HTML files
+                const hasUIKeyword = uiKeywords.some(keyword => lowerContent.includes(keyword));
+                
+                if (hasUIKeyword) {
+                    // Try to extract file path
+                    const fileMatch = content.match(/index\.html|[a-zA-Z0-9_-]+\.html/);
+                    if (fileMatch) {
+                        // Find the actual file path in projectFiles
+                        const fileName = fileMatch[0];
+                        const filePath = Object.keys(this.projectFiles).find(path => path.includes(fileName));
+                        
+                        if (filePath) {
+                            return { filePath, fileName };
+                        }
+                    }
+                }
+                
+                return null;
+            }
             updatePmTask(taskId, updates) {
                 if (!taskId) return;
                 const existing = this.pmTasks.get(taskId) || {};
                 const merged = { ...existing, ...updates };
                 this.pmTasks.set(taskId, merged);
                 this.renderPmTaskList();
+            }
+            updatePmProgress(completed, total, percent, currentTask) {
+                // Store progress state for rendering
+                this.pmProgress = { completed, total, percent, currentTask };
+                this.renderPmTaskList(); // Re-render to show updated progress
             }
             renderPmTaskList() {
                 if (!this.pmTaskListElement) return;
@@ -1247,15 +2259,55 @@
                     this.pmTaskListElement.appendChild(emptyState);
                     return;
                 }
+                
+                // Add progress summary - use dynamic progress if available, otherwise calculate from tasks
                 const tasks = Array.from(this.pmTasks.values());
-                tasks.forEach(task => {
+                let completedCount, totalCount, progressPercent, currentTaskLabel;
+                
+                if (this.pmProgress && this.pmProgress.total > 0) {
+                    // Use real-time progress from PM Agent
+                    completedCount = this.pmProgress.completed;
+                    totalCount = this.pmProgress.total;
+                    progressPercent = this.pmProgress.percent;
+                    currentTaskLabel = this.pmProgress.currentTask ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Current: ${this.pmProgress.currentTask}</div>` : '';
+                } else {
+                    // Fallback to task completion count
+                    completedCount = tasks.filter(t => t.status === 'completed').length;
+                    totalCount = tasks.length;
+                    progressPercent = totalCount > 0 ? Math.round((completedCount/totalCount) * 100) : 0;
+                    currentTaskLabel = '';
+                }
+                
+                const progressBar = document.createElement('div');
+                progressBar.className = 'pm-progress-bar';
+                progressBar.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 14px;">Progress: ${completedCount}/${totalCount} tasks</span>
+                        <span style="font-size: 13px; color: var(--text-secondary);">${progressPercent}%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                        <div style="width: ${progressPercent}%; height: 100%; background: linear-gradient(90deg, #0f7b45, #1ea660); transition: width 0.3s;"></div>
+                    </div>
+                    ${currentTaskLabel}
+                `;
+                this.pmTaskListElement.appendChild(progressBar);
+                
+                // Render task items with improved icons
+                tasks.forEach((task, index) => {
                     const item = document.createElement('div');
                     item.className = 'pm-task-item';
                     const header = document.createElement('div');
                     header.className = 'pm-task-header';
                     const title = document.createElement('div');
                     title.className = 'pm-task-title';
-                    title.textContent = task.title || 'Untitled Task';
+                    
+                    // Status icon mapping
+                    let statusIcon = '⏳';
+                    if (task.status === 'in-progress') statusIcon = '🔄';
+                    else if (task.status === 'completed') statusIcon = '✅';
+                    else if (task.status === 'failed') statusIcon = '❌';
+                    
+                    title.innerHTML = `<span style="margin-right: 8px;">${statusIcon}</span>${task.title || 'Untitled Task'}`;
                     const status = document.createElement('span');
                     status.className = `pm-task-status ${task.status || 'pending'}`;
                     status.textContent = (task.status || 'pending').replace('-', ' ');
@@ -1264,8 +2316,9 @@
                     const meta = document.createElement('div');
                     meta.className = 'pm-task-meta';
                     const metaParts = [];
-                    if (task.agent) metaParts.push(`👤 Agent: ${task.agent.replace('_agent', '').toUpperCase()}`);
-                    if (task.priority !== undefined) metaParts.push(`⭐ Priority: ${task.priority}`);
+                    metaParts.push(`#${index + 1}`);
+                    if (task.agent) metaParts.push(`👤 ${task.agent.replace('_agent', '').toUpperCase()}`);
+                    if (task.priority !== undefined) metaParts.push(`⭐ ${task.priority}`);
                     if (task.outputDir) metaParts.push(`📁 ${task.outputDir}`);
                     if (task.lastGeneratedFile) metaParts.push(`📄 ${task.lastGeneratedFile}`);
                     meta.innerHTML = metaParts.map(part => `<span>${part}</span>`).join('');
@@ -1278,6 +2331,181 @@
                 if (!content || !this.pmAgentLogBody) return;
                 this.pmAgentLogBody.textContent += content;
                 this.pmAgentLogBody.scrollTop = this.pmAgentLogBody.scrollHeight;
+            }
+            
+            // QA Agent panel functions
+                async addQaTestResult(fileName, passed, details) {
+                    if (!fileName || !this.qaTestResults) return;
+                    this.qaTests.set(fileName, { passed, details });
+                    await this.renderQaTestResults();
+                }
+
+                async renderQaTestResults() {
+                    if (!this.qaTestResults) return;
+                    this.qaTestResults.innerHTML = '';
+                    // Load detailed QA report from backend if available
+                    try {
+                        const response = await fetch('/api/qa_report');
+                        if (response.ok) {
+                            const report = await response.json();
+                            if (report && Array.isArray(report.results) && report.results.length > 0) {
+                                report.results.forEach(result => {
+                                    const item = document.createElement('div');
+                                    item.className = `qa-test-item ${result.passed ? 'passed' : 'failed'}`;
+                                    const header = document.createElement('div');
+                                    header.className = 'qa-test-item-header';
+                                    const fileNameEl = document.createElement('div');
+                                    fileNameEl.className = 'qa-test-file-name';
+                                    fileNameEl.textContent = result.file_name;
+                                    fileNameEl.onclick = () => {
+                                        const filePath = Object.keys(this.projectFiles).find(path => path.endsWith(result.file_name));
+                                        if (filePath) this.showFileContent(filePath);
+                                    };
+                                    const statusEl = document.createElement('span');
+                                    statusEl.className = `qa-test-status ${result.passed ? 'passed' : 'failed'}`;
+                                    statusEl.textContent = result.passed ? 'PASSED' : 'FAILED';
+                                    header.appendChild(fileNameEl);
+                                    header.appendChild(statusEl);
+                                    item.appendChild(header);
+                                    if (result.details) {
+                                        const details = document.createElement('div');
+                                        details.className = 'qa-test-details';
+                                        details.textContent = result.details;
+                                        item.appendChild(details);
+                                    }
+                                    if (result.error) {
+                                        const error = document.createElement('div');
+                                        error.className = 'qa-test-details';
+                                        error.style.color = '#b71c1c';
+                                        error.textContent = `Error: ${result.error}`;
+                                        item.appendChild(error);
+                                    }
+                                    if (result.suggestion) {
+                                        const suggestion = document.createElement('div');
+                                        suggestion.className = 'qa-test-details';
+                                        suggestion.style.color = '#4a90e2';
+                                        suggestion.textContent = `Suggestion: ${result.suggestion}`;
+                                        item.appendChild(suggestion);
+                                    }
+                                    this.qaTestResults.appendChild(item);
+                                });
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        // fallback to local results
+                    }
+                    // fallback: show local results if no backend report
+                    if (this.qaTests.size === 0) {
+                        const emptyState = document.createElement('div');
+                        emptyState.className = 'empty-state';
+                        emptyState.textContent = 'No test results yet. QA Agent will display results here.';
+                        this.qaTestResults.appendChild(emptyState);
+                        return;
+                    }
+                    this.qaTests.forEach((result, fileName) => {
+                        const item = document.createElement('div');
+                        item.className = `qa-test-item ${result.passed ? 'passed' : 'failed'}`;
+                        const header = document.createElement('div');
+                        header.className = 'qa-test-item-header';
+                        const fileNameEl = document.createElement('div');
+                        fileNameEl.className = 'qa-test-file-name';
+                        fileNameEl.textContent = fileName;
+                        fileNameEl.onclick = () => {
+                            const filePath = Object.keys(this.projectFiles).find(path => path.endsWith(fileName));
+                            if (filePath) this.showFileContent(filePath);
+                        };
+                        const statusEl = document.createElement('span');
+                        statusEl.className = `qa-test-status ${result.passed ? 'passed' : 'failed'}`;
+                        statusEl.textContent = result.passed ? 'PASSED' : 'FAILED';
+                        header.appendChild(fileNameEl);
+                        header.appendChild(statusEl);
+                        item.appendChild(header);
+                        if (result.details) {
+                            const details = document.createElement('div');
+                            details.className = 'qa-test-details';
+                            details.textContent = result.details;
+                            item.appendChild(details);
+                        }
+                        this.qaTestResults.appendChild(item);
+                    });
+                }
+            
+            appendQaActivityLog(message) {
+                if (!this.qaActivityLog) return;
+                
+                const timestamp = new Date().toLocaleTimeString();
+                this.qaActivityLog.textContent += `[${timestamp}] ${message}\n`;
+                this.qaActivityLog.scrollTop = this.qaActivityLog.scrollHeight;
+            }
+            
+            // Ops Agent panel functions
+            updateOpsDeploymentStatus(status, repoUrl, deployUrl) {
+                if (!this.opsDeploymentStatus) return;
+                
+                this.deploymentInfo = {
+                    status: status || this.deploymentInfo.status,
+                    repoUrl: repoUrl || this.deploymentInfo.repoUrl,
+                    deployUrl: deployUrl || this.deploymentInfo.deployUrl
+                };
+                
+                this.renderOpsDeploymentStatus();
+            }
+            
+            renderOpsDeploymentStatus() {
+                if (!this.opsDeploymentStatus) return;
+                
+                this.opsDeploymentStatus.innerHTML = '';
+                
+                if (!this.deploymentInfo.status) {
+                    const emptyState = document.createElement('div');
+                    emptyState.className = 'empty-state';
+                    emptyState.textContent = 'No deployment yet. Ops Agent will show deployment details here.';
+                    this.opsDeploymentStatus.appendChild(emptyState);
+                    return;
+                }
+                
+                // Status item
+                if (this.deploymentInfo.status) {
+                    const statusItem = document.createElement('div');
+                    statusItem.className = 'ops-status-item';
+                    statusItem.innerHTML = `
+                        <div class="ops-status-label">Status</div>
+                        <div class="ops-status-value">${this.deploymentInfo.status}</div>
+                    `;
+                    this.opsDeploymentStatus.appendChild(statusItem);
+                }
+                
+                // Repository URL
+                if (this.deploymentInfo.repoUrl) {
+                    const repoItem = document.createElement('div');
+                    repoItem.className = 'ops-status-item';
+                    repoItem.innerHTML = `
+                        <div class="ops-status-label">📦 GitHub Repository</div>
+                        <div class="ops-status-value"><a href="${this.deploymentInfo.repoUrl}" target="_blank">${this.deploymentInfo.repoUrl}</a></div>
+                    `;
+                    this.opsDeploymentStatus.appendChild(repoItem);
+                }
+                
+                // Deployment URL
+                if (this.deploymentInfo.deployUrl) {
+                    const deployItem = document.createElement('div');
+                    deployItem.className = 'ops-status-item';
+                    deployItem.innerHTML = `
+                        <div class="ops-status-label">🌐 Live Application</div>
+                        <div class="ops-status-value"><a href="${this.deploymentInfo.deployUrl}" target="_blank">${this.deploymentInfo.deployUrl}</a></div>
+                    `;
+                    this.opsDeploymentStatus.appendChild(deployItem);
+                    
+                    // Also update the live preview iframe
+                    this.updateOpsLivePreview(this.deploymentInfo.deployUrl);
+                }
+            }
+            
+            updateOpsLivePreview(url) {
+                if (!this.opsLivePreview || !url) return;
+                
+                this.opsLivePreview.innerHTML = `<iframe src="${url}" title="Live Preview"></iframe>`;
             }
             // Adds copy buttons to code blocks within a given element
             addCopyButtonsToCodeBlocks(element) {
@@ -1390,11 +2618,53 @@
                     const fileData = this.projectFiles[this.activeFile];
                     if (fileData && fileData.content) {
                         this.copyToClipboard(fileData.content);
-                        this.showMessage('Content copied to clipboard!');
+                        
+                        // Visual feedback - change button to "Copied!"
+                        const originalHTML = this.copyFileBtn.innerHTML;
+                        this.copyFileBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        this.copyFileBtn.classList.add('copied');
+                        
+                        setTimeout(() => {
+                            this.copyFileBtn.innerHTML = originalHTML;
+                            this.copyFileBtn.classList.remove('copied');
+                        }, 2000);
                     } else {
                         this.addLogMessage('File content not available for copy.', 'warning');
                     }
                 });
+                
+                // Enhanced file viewer: Edit mode
+                this.editFileBtn.addEventListener('click', () => this.toggleEditMode());
+                
+                // Enhanced file viewer: Save file
+                this.saveFileBtn.addEventListener('click', () => this.saveCurrentFile());
+                
+                // Enhanced file viewer: Run code
+                this.runFileBtn.addEventListener('click', () => this.runCurrentFile());
+                
+                // Enhanced file viewer: Toggle preview
+                this.previewFileBtn.addEventListener('click', () => this.toggleLivePreview());
+                
+                // Enhanced file viewer: Refresh preview
+                this.refreshPreviewBtn.addEventListener('click', () => this.refreshLivePreview());
+                
+                // Enhanced file viewer: Expand/collapse
+                this.expandFileBtn.addEventListener('click', () => this.toggleExpandFileViewer());
+                
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    // Ctrl+S to save
+                    if (e.ctrlKey && e.key === 's' && this.isEditMode) {
+                        e.preventDefault();
+                        this.saveCurrentFile();
+                    }
+                    // Ctrl+E to toggle edit mode
+                    if (e.ctrlKey && e.key === 'e' && !this.fileViewerPanel.classList.contains('hidden')) {
+                        e.preventDefault();
+                        this.toggleEditMode();
+                    }
+                });
+                
                 this.agentTabs.forEach(tab => {
                     tab.addEventListener('click', (e) => {
                         if (e.target.classList.contains('disabled')) return;
@@ -1414,6 +2684,23 @@
                         this.clearAllData();
                     });
                 });
+                
+                // Download All Files button
+                const downloadAllBtn = document.getElementById('download-all-btn');
+                if (downloadAllBtn) {
+                    downloadAllBtn.addEventListener('click', () => {
+                        this.downloadAllProjectFiles();
+                    });
+                }
+                
+                // Toggle Archived Projects button
+                const toggleArchivedBtn = document.getElementById('toggle-archived-btn');
+                if (toggleArchivedBtn) {
+                    toggleArchivedBtn.addEventListener('click', () => {
+                        this.toggleArchivedProjects();
+                    });
+                }
+                
                 // Project Renaming
                 this.currentProjectNameElement.addEventListener('dblclick', () => this.editProjectName());
                 // Context menu for files
@@ -1584,6 +2871,82 @@
                 }
                 document.body.removeChild(textarea);
             }
+            
+            /**
+             * Download all files in current project as ZIP
+             */
+            downloadAllProjectFiles() {
+                window.open('/api/project/download?project_type=current', '_blank');
+                this.addChatMessage('📦 Downloading all project files as ZIP...', 'ai');
+            }
+            
+            /**
+             * Toggle archived projects visibility
+             */
+            toggleArchivedProjects() {
+                const archivedSection = document.getElementById('archived-projects-section');
+                const toggleBtn = document.getElementById('toggle-archived-btn');
+                const archivedList = document.getElementById('archived-projects-list');
+                
+                if (archivedList.style.display === 'none') {
+                    archivedList.style.display = 'block';
+                    toggleBtn.querySelector('i').classList.replace('fa-chevron-down', 'fa-chevron-up');
+                    this.loadArchivedProjects();
+                } else {
+                    archivedList.style.display = 'none';
+                    toggleBtn.querySelector('i').classList.replace('fa-chevron-up', 'fa-chevron-down');
+                }
+            }
+            
+            /**
+             * Load and display archived projects
+             */
+            async loadArchivedProjects() {
+                try {
+                    const response = await fetch('/api/project/archived');
+                    const data = await response.json();
+                    
+                    const archivedList = document.getElementById('archived-projects-list');
+                    archivedList.innerHTML = '';
+                    
+                    if (!data.archived || data.archived.length === 0) {
+                        archivedList.innerHTML = '<p style="padding: 10px; color: var(--text-secondary); font-size: 13px;">No archived projects yet</p>';
+                        return;
+                    }
+                    
+                    data.archived.forEach(project => {
+                        const projectItem = document.createElement('div');
+                        projectItem.className = 'archived-project-item';
+                        
+                        const projectName = document.createElement('div');
+                        projectName.className = 'archived-project-name';
+                        projectName.textContent = project.name;
+                        
+                        const projectDate = document.createElement('div');
+                        projectDate.className = 'archived-project-date';
+                        const date = new Date(project.archived_at || project.timestamp);
+                        projectDate.textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                        
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.className = 'icon-btn';
+                        downloadBtn.style.marginTop = '8px';
+                        downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
+                        downloadBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            window.open(`/api/project/download?project_type=${encodeURIComponent(project.name)}`, '_blank');
+                        };
+                        
+                        projectItem.appendChild(projectName);
+                        projectItem.appendChild(projectDate);
+                        projectItem.appendChild(downloadBtn);
+                        
+                        archivedList.appendChild(projectItem);
+                    });
+                } catch (error) {
+                    console.error('Error loading archived projects:', error);
+                }
+            }
+            
             initializeMockFiles() {
                 const welcomeContent = {
                     name: 'Welcome',
@@ -1664,19 +3027,41 @@
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = `${protocol}//${window.location.host}/ws`;
                 console.log("Attempting WebSocket connection to:", wsUrl);
+                
+                // Clear existing keep-alive interval
+                if (this.keepAliveInterval) {
+                    clearInterval(this.keepAliveInterval);
+                    this.keepAliveInterval = null;
+                }
+                
                 try {
                     this.ws = new WebSocket(wsUrl);
                     this.ws.onopen = () => {
-                        console.log('WebSocket connected');
+                        console.log('✅ WebSocket connected');
                         this.reconnectAttempts = 0;
                         this.isConnecting = false;
                         this.updateConnectionStatus(true);
                         this.addLogMessage('Connected to planning server', 'info');
                         this.fetchInitialFiles();
+                        
+                        // Start keep-alive pings every 30 seconds
+                        this.keepAliveInterval = setInterval(() => {
+                            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                                this.ws.send(JSON.stringify({ type: 'ping' }));
+                                console.log('💓 Sent keep-alive ping');
+                            }
+                        }, 30000); // Every 30 seconds
                     };
                     this.ws.onmessage = (event) => {
                         try {
                             const data = JSON.parse(event.data);
+                            
+                            // Handle keep-alive responses
+                            if (data.type === 'pong' || data.type === 'keepalive') {
+                                console.log('💓 Keep-alive acknowledged');
+                                return;
+                            }
+                            
                             this.handleMessage(data);
                         } catch (error) {
                             console.error('Failed to parse WebSocket message:', error);
@@ -1684,16 +3069,23 @@
                         }
                     };
                     this.ws.onclose = (event) => {
-                        console.log('WebSocket disconnected', event.code, event.reason);
+                        console.log('🔌 WebSocket disconnected', event.code, event.reason);
                         this.isConnecting = false;
                         this.updateConnectionStatus(false);
                         this.addLogMessage(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason || 'N/A'}`, 'warning');
+                        
+                        // Clear keep-alive interval
+                        if (this.keepAliveInterval) {
+                            clearInterval(this.keepAliveInterval);
+                            this.keepAliveInterval = null;
+                        }
+                        
                         if (event.code !== 1000) { // 1000 is normal closure
                             this.attemptReconnect();
                         }
                     };
                     this.ws.onerror = (error) => {
-                        console.error('WebSocket error:', error);
+                        console.error('❌ WebSocket error:', error);
                         this.isConnecting = false;
                         this.updateConnectionStatus(false);
                         this.addLogMessage('WebSocket error occurred. Check console for details.', 'error');
@@ -1850,47 +3242,426 @@
                 this.showActiveAgentPanel(this.activeAgentTab); // This will hide the other main panels
                 this.fileViewerPanel.classList.remove('hidden'); // Show file viewer
                 this.contentArea.classList.add('split-active'); // Activate split view on contentArea
-                this.fileViewerFilename.textContent = filePath;
-                if (this.projectFiles[filePath] && this.projectFiles[filePath].content && !this.projectFiles[filePath].content.startsWith('// Content for')) {
-                    const fileContent = this.projectFiles[filePath].content;
-                    const fileExtension = filePath.split('.').pop();
-                    let languageClass = 'language-text';
-                    switch (fileExtension) {
-                        case 'js':
-                        case 'jsx':
-                            languageClass = 'language-javascript';
-                            break;
-                        case 'py':
-                            languageClass = 'language-python';
-                            break;
-                        case 'json':
-                            languageClass = 'language-json';
-                            break;
-                        case 'html':
-                        case 'htm':
-                            languageClass = 'language-html';
-                            break;
-                        case 'css':
-                            languageClass = 'language-css';
-                            break;
-                        case 'md':
-                            languageClass = 'language-markdown';
-                            break;
-                        // Add more cases as needed
-                    }
-                    this.fileContentDisplay.innerHTML = `<pre class="line-numbers"><code class="${languageClass}">${fileContent}</code></pre>`;
-                    Prism.highlightElement(this.fileContentDisplay.querySelector('code'));
-                } else {
+                
+                // Use new tab system
+                this.openTab(filePath);
+                
+                // If file content is not loaded yet, request it
+                if (!this.projectFiles[filePath] || !this.projectFiles[filePath].content || this.projectFiles[filePath].content.startsWith('// Content for')) {
                     this.fileContentDisplay.innerHTML = '<div class="code-placeholder">Loading...</div>';
+                    document.getElementById('file-size').textContent = 'Loading...';
+                    document.getElementById('file-lines').textContent = 'Loading...';
+                    document.getElementById('file-type').textContent = 'Loading...';
                     this.ws.send(JSON.stringify({ type: 'request_file_content', file_path: filePath }));
                 }
+            }
+            /**
+             * Toggle edit mode for the current file
+             */
+            toggleEditMode() {
+                if (this.activeTabIndex < 0) return;
+                
+                this.isEditMode = !this.isEditMode;
+                
+                if (this.isEditMode) {
+                    // Enable editing
+                    this.originalContent = this.fileContentDisplay.textContent;
+                    const code = this.fileContentDisplay.querySelector('code');
+                    code.contentEditable = true;
+                    code.style.outline = '2px solid #4a90e2';
+                    this.fileViewerContent.classList.add('edit-mode');
+                    this.editModeIndicator.style.display = 'flex';
+                    this.saveFileBtn.disabled = false;
+                    this.editFileBtn.innerHTML = '<i class="fas fa-eye"></i> View';
+                    
+                    // Listen for content changes
+                    code.addEventListener('input', () => this.markFileAsDirty());
+                } else {
+                    // Disable editing
+                    const code = this.fileContentDisplay.querySelector('code');
+                    code.contentEditable = false;
+                    code.style.outline = 'none';
+                    this.fileViewerContent.classList.remove('edit-mode');
+                    this.editModeIndicator.style.display = 'none';
+                    this.editFileBtn.innerHTML = '<i class="fas fa-edit"></i> Edit';
+                }
+            }
+            
+            /**
+             * Mark current file as dirty (unsaved changes)
+             */
+            markFileAsDirty() {
+                if (this.activeTabIndex >= 0) {
+                    this.openTabs[this.activeTabIndex].isDirty = true;
+                    this.unsavedIndicator.classList.remove('hidden');
+                    this.saveFileBtn.disabled = false;
+                    this.renderTabs();
+                }
+            }
+            
+            /**
+             * Save the current file
+             */
+            saveCurrentFile() {
+                if (this.activeTabIndex < 0 || !this.isEditMode) return;
+                
+                const tab = this.openTabs[this.activeTabIndex];
+                const code = this.fileContentDisplay.querySelector('code');
+                const newContent = code.textContent;
+                
+                // Update projectFiles
+                if (this.projectFiles[tab.path]) {
+                    this.projectFiles[tab.path].content = newContent;
+                }
+                
+                // Mark as saved
+                tab.isDirty = false;
+                tab.content = newContent;
+                this.unsavedIndicator.classList.add('hidden');
+                
+                // Update UI
+                this.renderTabs();
+                this.saveFileBtn.classList.add('success');
+                this.saveFileBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                
+                setTimeout(() => {
+                    this.saveFileBtn.classList.remove('success');
+                    this.saveFileBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+                }, 2000);
+                
+                // Send to server (optional)
+                // this.ws.send(JSON.stringify({ type: 'save_file', file_path: tab.path, content: newContent }));
+            }
+            
+            /**
+             * Run the current file code
+             */
+            runCurrentFile() {
+                if (this.activeTabIndex < 0) return;
+                
+                const tab = this.openTabs[this.activeTabIndex];
+                const code = this.fileContentDisplay.querySelector('code').textContent;
+                
+                // Show in chat that code is running
+                this.addChatMessage(`▶️ Running \`${tab.name}\`...`, 'ai');
+                
+                // Send to backend to execute
+                this.ws.send(JSON.stringify({ 
+                    type: 'run_code', 
+                    file_path: tab.path, 
+                    code: code,
+                    language: tab.language 
+                }));
+            }
+            
+            /**
+             * Toggle live preview panel
+             */
+            toggleLivePreview() {
+                if (this.activeTabIndex < 0) return;
+                
+                const tab = this.openTabs[this.activeTabIndex];
+                const isHtmlFile = tab.path.endsWith('.html') || tab.path.endsWith('.htm');
+                
+                if (!isHtmlFile) {
+                    this.addChatMessage('⚠️ Live preview is only available for HTML files.', 'ai');
+                    return;
+                }
+                
+                const isVisible = this.livePreviewPanel.classList.toggle('visible');
+                
+                if (isVisible) {
+                    this.refreshLivePreview();
+                    this.previewFileBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Preview';
+                } else {
+                    this.previewFileBtn.innerHTML = '<i class="fas fa-eye"></i> Preview';
+                }
+            }
+            
+            /**
+             * Refresh the live preview iframe
+             */
+            refreshLivePreview() {
+                if (this.activeTabIndex < 0) return;
+                
+                try {
+                    const codeElement = this.fileContentDisplay.querySelector('code');
+                    if (!codeElement) {
+                        console.warn('⚠️ No code element found for live preview');
+                        return;
+                    }
+                    
+                    const code = codeElement.textContent;
+                    if (!code || code.trim() === '') {
+                        console.warn('⚠️ No content to preview');
+                        return;
+                    }
+                    
+                    const iframe = this.livePreviewIframe;
+                    
+                    // Write content to iframe
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    iframeDoc.open();
+                    iframeDoc.write(code);
+                    iframeDoc.close();
+                    
+                    console.log('✅ Live preview refreshed');
+                } catch (error) {
+                    console.error('❌ Error refreshing live preview:', error);
+                }
+            }
+            
+            /**
+             * Toggle expand/collapse file viewer (fullscreen mode)
+             */
+            toggleExpandFileViewer() {
+                this.fileViewerPanel.classList.toggle('expanded');
+                const isExpanded = this.fileViewerPanel.classList.contains('expanded');
+                
+                if (isExpanded) {
+                    this.fileViewerPanel.style.position = 'fixed';
+                    this.fileViewerPanel.style.top = '0';
+                    this.fileViewerPanel.style.left = '0';
+                    this.fileViewerPanel.style.width = '100vw';
+                    this.fileViewerPanel.style.height = '100vh';
+                    this.fileViewerPanel.style.zIndex = '9999';
+                    this.expandFileBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                } else {
+                    this.fileViewerPanel.style.position = '';
+                    this.fileViewerPanel.style.top = '';
+                    this.fileViewerPanel.style.left = '';
+                    this.fileViewerPanel.style.width = '';
+                    this.fileViewerPanel.style.height = '';
+                    this.fileViewerPanel.style.zIndex = '';
+                    this.expandFileBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                }
+            }
+            
+            /**
+             * Render file tabs
+             */
+            renderTabs() {
+                this.fileTabsContainer.innerHTML = '';
+                
+                this.openTabs.forEach((tab, index) => {
+                    const tabEl = document.createElement('div');
+                    tabEl.className = 'file-tab' + (index === this.activeTabIndex ? ' active' : '') + (tab.isDirty ? ' unsaved' : '');
+                    tabEl.title = tab.path;
+                    
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'file-tab-name';
+                    nameEl.textContent = tab.name;
+                    
+                    const closeEl = document.createElement('span');
+                    closeEl.className = 'file-tab-close';
+                    closeEl.textContent = '×';
+                    closeEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.closeTab(index);
+                    });
+                    
+                    tabEl.addEventListener('click', () => this.switchTab(index));
+                    
+                    tabEl.appendChild(nameEl);
+                    tabEl.appendChild(closeEl);
+                    this.fileTabsContainer.appendChild(tabEl);
+                });
+            }
+            
+            /**
+             * Open a file in a new tab or switch to existing tab
+             */
+            openTab(filePath) {
+                // Check if already open
+                const existingIndex = this.openTabs.findIndex(t => t.path === filePath);
+                if (existingIndex >= 0) {
+                    this.switchTab(existingIndex);
+                    return;
+                }
+                
+                // Open new tab
+                const fileData = this.projectFiles[filePath];
+                if (!fileData) return;
+                
+                const fileName = filePath.split('/').pop();
+                const fileExtension = fileName.split('.').pop();
+                
+                this.openTabs.push({
+                    path: filePath,
+                    name: fileName,
+                    content: fileData.content,
+                    isDirty: false,
+                    language: this.getLanguageFromExtension(fileExtension)
+                });
+                
+                this.activeTabIndex = this.openTabs.length - 1;
+                this.renderTabs();
+                this.displayTabContent(this.activeTabIndex);
+            }
+            
+            /**
+             * Switch to a different tab
+             */
+            switchTab(index) {
+                if (index < 0 || index >= this.openTabs.length) return;
+                
+                this.activeTabIndex = index;
+                this.renderTabs();
+                this.displayTabContent(index);
+            }
+            
+            /**
+             * Close a tab
+             */
+            closeTab(index) {
+                if (index < 0 || index >= this.openTabs.length) return;
+                
+                const tab = this.openTabs[index];
+                
+                // Confirm if unsaved changes
+                if (tab.isDirty) {
+                    const confirmed = confirm(`"${tab.name}" has unsaved changes. Close anyway?`);
+                    if (!confirmed) return;
+                }
+                
+                this.openTabs.splice(index, 1);
+                
+                // Update active tab index
+                if (this.openTabs.length === 0) {
+                    this.activeTabIndex = -1;
+                    this.fileViewerPanel.classList.add('hidden');
+                    this.contentArea.classList.remove('split-active');
+                } else if (index === this.activeTabIndex) {
+                    this.activeTabIndex = Math.min(index, this.openTabs.length - 1);
+                    this.displayTabContent(this.activeTabIndex);
+                } else if (index < this.activeTabIndex) {
+                    this.activeTabIndex--;
+                }
+                
+                this.renderTabs();
+            }
+            
+            /**
+             * Display content of the active tab
+             */
+            displayTabContent(index) {
+                if (index < 0 || index >= this.openTabs.length) return;
+                
+                const tab = this.openTabs[index];
+                const languageClass = `language-${tab.language}`;
+                
+                const fullPath = tab.path;
+                const pathParts = fullPath.split(/[\\/]/);
+                const fileName = pathParts.pop();
+                const parentPath = pathParts.join('/');
+                let folderDisplay = parentPath || '(root)';
+                if (folderDisplay.length > 40) {
+                    folderDisplay = `${folderDisplay.slice(0, 18)}…${folderDisplay.slice(-18)}`;
+                }
+                this.fileViewerFilename.textContent = `Folder: ${folderDisplay}`;
+                this.fileViewerFilename.title = parentPath ? parentPath : 'Project root';
+                this.fileTypeBadge.textContent = tab.language.toUpperCase();
+                this.fileTypeBadge.style.display = 'inline-block';
+                
+                this.fileContentDisplay.innerHTML = '';
+                const pre = document.createElement('pre');
+                pre.className = 'line-numbers';
+                const code = document.createElement('code');
+                code.className = languageClass;
+                code.textContent = tab.content;
+                pre.appendChild(code);
+                this.fileContentDisplay.appendChild(pre);
+                
+                Prism.highlightElement(code);
+                
+                this.updateFileMetadata(tab.content, tab.language);
+                
+                // Update unsaved indicator
+                if (tab.isDirty) {
+                    this.unsavedIndicator.classList.remove('hidden');
+                } else {
+                    this.unsavedIndicator.classList.add('hidden');
+                }
+            }
+            
+            /**
+             * Get programming language from file extension
+             */
+            getLanguageFromExtension(extension) {
+                const map = {
+                    'js': 'javascript',
+                    'jsx': 'javascript',
+                    'py': 'python',
+                    'json': 'json',
+                    'html': 'html',
+                    'htm': 'html',
+                    'css': 'css',
+                    'md': 'markdown',
+                    'txt': 'text',
+                    'yml': 'yaml',
+                    'yaml': 'yaml'
+                };
+                return map[extension] || 'text';
+            }
+            
+            /**
+             * Updates the file metadata display (size, lines, type)
+             */
+            updateFileMetadata(content, extension) {
+                // Calculate file size
+                const sizeBytes = new Blob([content]).size;
+                let sizeDisplay;
+                if (sizeBytes < 1024) {
+                    sizeDisplay = `${sizeBytes} bytes`;
+                } else if (sizeBytes < 1024 * 1024) {
+                    sizeDisplay = `${(sizeBytes / 1024).toFixed(1)} KB`;
+                } else {
+                    sizeDisplay = `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+                }
+                document.getElementById('file-size').textContent = sizeDisplay;
+                
+                // Count lines
+                const lines = content.split('\n').length;
+                document.getElementById('file-lines').textContent = `${lines} lines`;
+                
+                // Determine file type
+                const typeMap = {
+                    'py': 'Python',
+                    'js': 'JavaScript',
+                    'jsx': 'React JSX',
+                    'json': 'JSON',
+                    'html': 'HTML',
+                    'htm': 'HTML',
+                    'css': 'CSS',
+                    'md': 'Markdown',
+                    'txt': 'Text',
+                    'yml': 'YAML',
+                    'yaml': 'YAML',
+                    'xml': 'XML'
+                };
+                document.getElementById('file-type').textContent = typeMap[extension] || extension.toUpperCase();
             }
             handleMessage(data) {
                 console.log("Received WS message:", data);
                 try {
                     switch (data.type) {
+                        case 'project_created':
+                            // Update project name in sidebar
+                            const projectNameSpan = this.currentProjectNameElement.querySelector('span');
+                            projectNameSpan.textContent = data.project_name || 'Current Project';
+                            
+                            // Show archived projects section if there are archived projects
+                            const archivedSection = document.getElementById('archived-projects-section');
+                            archivedSection.style.display = 'block';
+                            
+                            // Add message to chat
+                            if (data.message) {
+                                this.addChatMessage(data.message, 'ai');
+                            }
+                            break;
+                        
                         case 'planning_started':
-                            this.addChatMessage('🤖 PM Agent is analyzing your requirements and creating a plan...', 'ai');
+                            this.addChatMessage('🤖 **PM Agent**: Starting analysis of your requirements. Let me break this down into actionable tasks...', 'ai');
                             this.showActiveAgentPanel('chat'); // Ensure chat is active
                             this.setTypingIndicator(true); // Show typing indicator
                             this.setAgentStatus('chat', 'running'); // Set chat agent status to running
@@ -1942,15 +3713,13 @@
                                 priority: data.priority || 'N/A',
                                 status: 'pending'
                             });
-                            // Chat: Only acknowledge PM working when first task created
-                            if (!this.hasAnnouncedPmWork) {
-                                this.addChatMessage('🤖 PM Agent is mapping out the plan and assigning tasks...', 'ai');
-                                this.hasAnnouncedPmWork = true;
-                            }
+                            // Show detailed message for each task created
+                            const taskCount = this.pmTasks.size;
+                            this.addChatMessage(`📋 **PM Agent**: Created task #${taskCount}: "${data.task_title}" → Assigned to ${data.agent_type?.toUpperCase() || 'DEV'} Agent (Priority: ${data.priority || 'Medium'})`, 'ai');
                             break;
                         case 'dev_agent_started':
                             this.updatePmTask(data.task_id, { status: 'in-progress' });
-                            this.addChatMessage(`🔨 Dev Agent started coding: "${data.task_title}"`, 'ai');
+                            this.addChatMessage(`🔨 **Dev Agent**: Now working on "${data.task_title}". Generating code files...`, 'ai');
                             break;
                         case 'dev_agent_llm_streaming_chunk':
                             if (!this.devAgentOutput.dataset.rawContent) this.devAgentOutput.dataset.rawContent = '';
@@ -1981,45 +3750,113 @@
                             if (data.agent_id === 'dev') {
                                 if (data.status === 'completed') {
                                     this.updatePmTask(data.task_id, { status: 'completed', outputDir: data.output_directory, files: data.saved_files });
-                                    const outputPath = data.output_directory ? `📁 Files ready in ${data.output_directory}` : '📁 Files ready in generated code folder';
-                                    this.addChatMessage(`✅ Code ready! ${outputPath}`, 'ai');
+                                    const fileCount = data.saved_files?.length || 0;
+                                    const filesList = data.saved_files?.slice(0, 3).join(', ') || 'files';
+                                    const moreFiles = fileCount > 3 ? ` and ${fileCount - 3} more` : '';
+                                    this.addChatMessage(`✅ **Dev Agent**: Task completed! Generated ${fileCount} file(s): ${filesList}${moreFiles}. Check the file tree on the left.`, 'ai');
                                 } else if (data.status === 'failed') {
                                     this.updatePmTask(data.task_id, { status: 'failed' });
-                                    this.addChatMessage('❌ Code generation failed. Please review errors.', 'ai');
+                                    this.addChatMessage(`❌ **Dev Agent**: Code generation failed for this task. ${data.message || 'Reviewing and will retry...'}`, 'ai');
                                 }
                             } else if (data.agent_id === 'qa') {
                                 if (data.status === 'completed') {
-                                    this.addChatMessage(`✅ Testing completed successfully!`, 'ai');
+                                    this.addChatMessage(`✅ **QA Agent**: All tests passed! Code quality verified. Moving forward.`, 'ai');
                                 } else if (data.status === 'failed') {
-                                    this.addChatMessage(`❌ Testing failed. Review needed.`, 'ai');
+                                    this.addChatMessage(`❌ **QA Agent**: Found issues during testing. ${data.message || 'Dev team will review the feedback.'}`, 'ai');
                                 }
                             } else if (data.agent_id === 'ops') {
                                 if (data.status === 'completed') {
-                                    this.addChatMessage(`✅ Deployment completed successfully!`, 'ai');
+                                    this.addChatMessage(`✅ **Ops Agent**: Deployment complete! Your project is now live.`, 'ai');
+                                    this.updateOpsDeploymentStatus('✅ Deployment Complete', data.repo_url, data.deploy_url);
                                 } else if (data.status === 'failed') {
-                                    this.addChatMessage(`⚠️ Deployment issue: ${data.message || data.status}`, 'ai');
+                                    this.addChatMessage(`⚠️ **Ops Agent**: Deployment encountered an issue: ${data.message || data.status}`, 'ai');
+                                    this.updateOpsDeploymentStatus(`❌ Deployment Failed: ${data.message || 'Unknown error'}`, data.repo_url, null);
                                 }
                             }
                             // Log detailed info for debugging
                             this.addLogMessage(`[${data.agent_id}] Task '${data.task_id}': ${data.status}`, 'info');
                             break;
                         case 'dev_task_complete_init_qa':
-                            this.addChatMessage(`🧪 QA Agent is now testing the new code...`, 'ai');
+                            this.addChatMessage(`🧪 **QA Agent**: Starting code review and testing. Checking for quality, functionality, and best practices...`, 'ai');
+                            break;
+                        case 'qa_testing_file':
+                            if (data.file_name) {
+                                this.addChatMessage(`🧪 **QA Agent**: Testing file: \`${data.file_name}\`...`, 'ai');
+                                this.appendQaActivityLog(`Testing: ${data.file_name}`);
+                            }
+                            break;
+                        case 'qa_file_result':
+                            if (data.file_name) {
+                                const status = data.passed ? '✅ PASSED' : '❌ FAILED';
+                                this.addChatMessage(`${status} **QA Agent**: ${data.file_name} - ${data.message || 'Test complete'}`, 'ai');
+                                this.addQaTestResult(data.file_name, data.passed, data.message || data.details);
+                                this.appendQaActivityLog(`${status}: ${data.file_name} - ${data.message || 'Test complete'}`);
+                            }
                             break;
                         case 'qa_task_failed':
-                            this.addChatMessage(`❌ QA reported an issue. The dev team will take another look.`, 'ai');
+                            this.addChatMessage(`❌ **QA Agent**: Found issues that need attention. Sending feedback to Dev Agent for corrections...`, 'ai');
                             break;
                         case 'dev_task_failed':
-                            this.addChatMessage(`❌ Code generation failed. Retrying...`, 'ai');
+                            this.addChatMessage(`❌ **Dev Agent**: Task failed. Analyzing the issue and preparing to retry with improvements...`, 'ai');
+                            break;
+                        case 'dev_summary':
+                            // Display development summary with formatted markdown
+                            if (data.message) {
+                                this.addChatMessage(data.message, 'ai');
+                            }
+                            // Log summary statistics
+                            if (data.stats) {
+                                console.log('📊 Development Summary Stats:', data.stats);
+                            }
+                            break;
+                        case 'dev_progress_summary':
+                            // Incremental summary every 5 files
+                            if (data.message) {
+                                this.addChatMessage(data.message, 'ai');
+                                this.addLogMessage(`[${data.task_title}] Created ${data.files_created}/${data.total_files} files`, 'info');
+                            }
+                            break;
+                        case 'dev_completion_summary':
+                            // Final comprehensive summary after task completion
+                            if (data.message) {
+                                this.addChatMessage(data.message, 'ai');
+                                this.addLogMessage(`[${data.task_title}] Development completed with full summary`, 'success');
+                            }
+                            break;
+                        case 'pm_progress':
+                            // Update PM Agent panel progress bar
+                            if (data.percent !== undefined && data.completed !== undefined && data.total !== undefined) {
+                                this.updatePmProgress(data.completed, data.total, data.percent, data.current_task);
+                                this.addLogMessage(`[PM Agent] Task generation: ${data.completed}/${data.total} (${data.percent}%) - ${data.current_task}`, 'info');
+                            }
                             break;
                         case 'all_dev_tasks_complete_init_ops':
-                            this.addChatMessage(`🚀 All development tasks done! Deployment is starting...`, 'ai');
+                            this.addChatMessage(`🚀 **Ops Agent**: All development and testing complete! Preparing deployment pipeline...`, 'ai');
                             break;
                         case 'ops_deployment_status':
                             if (data.status === 'completed') {
-                                this.addChatMessage(`✅ Deployment successful! Your project is live.`, 'ai');
+                                const repoUrl = data.repo_url || 'GitHub repository';
+                                const deployUrl = data.deploy_url || '';
+                                let msg = `✅ **Ops Agent**: Deployment successful! 🎉\n\n`;
+                                msg += `📦 Repository: ${repoUrl}\n`;
+                                if (deployUrl) {
+                                    msg += `🌐 Live URL: ${deployUrl}\n`;
+                                }
+                                msg += `\nSwitch to the Ops Agent tab to see full deployment details and preview.`;
+                                this.addChatMessage(msg, 'ai');
+                                this.updateOpsDeploymentStatus('✅ Deployment Successful', data.repo_url, data.deploy_url);
+                            } else if (data.status === 'creating_repo') {
+                                this.addChatMessage(`📦 **Ops Agent**: Creating GitHub repository...`, 'ai');
+                                this.updateOpsDeploymentStatus('📦 Creating Repository', data.repo_url, null);
+                            } else if (data.status === 'building') {
+                                this.addChatMessage(`🔧 **Ops Agent**: Building Docker image...`, 'ai');
+                                this.updateOpsDeploymentStatus('🔧 Building Image', this.deploymentInfo.repoUrl, null);
+                            } else if (data.status === 'deploying') {
+                                this.addChatMessage(`🚀 **Ops Agent**: Deploying to production...`, 'ai');
+                                this.updateOpsDeploymentStatus('🚀 Deploying', this.deploymentInfo.repoUrl, null);
                             } else {
-                                this.addChatMessage(`⚠️ Deployment status: ${data.status}`, 'ai');
+                                this.addChatMessage(`⚠️ **Ops Agent**: Deployment status update - ${data.status}`, 'ai');
+                                this.updateOpsDeploymentStatus(data.status, data.repo_url, data.deploy_url);
                             }
                             break;
                         case 'file_generated':
@@ -2030,7 +3867,9 @@
                             if (data.file_name && !/\.(txt|md)$/i.test(data.file_name)) {
                                 this.handleFileGenerated(data);
                                 this.renderFileTree();
-                                // Show file notification in Dev Agent tab, not chat
+                                // Show brief notification in chat
+                                this.addChatMessage(`📄 **Dev Agent**: Created file: \`${data.file_name}\``, 'ai');
+                                // Show file notification in Dev Agent tab
                                 if (this.devAgentOutput) {
                                     const fileNotice = document.createElement('div');
                                     fileNotice.className = 'file-notice';
@@ -2059,9 +3898,53 @@
                             if (data.file_path && this.projectFiles[data.file_path]) {
                                 this.projectFiles[data.file_path].content = data.content;
                                 if (this.activeFile === data.file_path) {
-                                    this.showFileContent(data.file_path); // Re-render with actual content
+                                    // Re-render with actual content
+                                    const fileExtension = data.file_path.split('.').pop();
+                                    let languageClass = 'language-text';
+                                    const isHtmlFile = fileExtension === 'html' || fileExtension === 'htm';
+                                    
+                                    switch (fileExtension) {
+                                        case 'js':
+                                        case 'jsx':
+                                            languageClass = 'language-javascript';
+                                            break;
+                                        case 'py':
+                                            languageClass = 'language-python';
+                                            break;
+                                        case 'json':
+                                            languageClass = 'language-json';
+                                            break;
+                                        case 'html':
+                                        case 'htm':
+                                            languageClass = 'language-html';
+                                            break;
+                                        case 'css':
+                                            languageClass = 'language-css';
+                                            break;
+                                        case 'md':
+                                            languageClass = 'language-markdown';
+                                            break;
+                                    }
+                                    this.fileContentDisplay.innerHTML = `<pre class="line-numbers"><code class="${languageClass}">${data.content}</code></pre>`;
+                                    Prism.highlightElement(this.fileContentDisplay.querySelector('code'));
+                                    this.updateFileMetadata(data.content, fileExtension);
+                                    
+                                    // Auto-show live preview for HTML files
+                                    if (isHtmlFile && data.content && !this.livePreviewPanel.classList.contains('visible')) {
+                                        console.log('🌐 Auto-opening live preview for HTML file');
+                                        this.livePreviewPanel.classList.add('visible');
+                                        this.previewFileBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Preview';
+                                        // Refresh preview after a short delay to ensure content is rendered
+                                        setTimeout(() => {
+                                            this.refreshLivePreview();
+                                        }, 100);
+                                    }
                                 }
                             }
+                            break;
+                        case 'request_github_deployment':
+                            // Show deployment prompt modal to user
+                            this.showGitHubDeploymentPrompt(data);
                             break;
                         case 'error':
                             this.handleError(data);
@@ -2179,6 +4062,131 @@
                         onConfirm();
                     }
                 }
+            }
+            showGitHubDeploymentPrompt(data) {
+                // Create a custom modal for GitHub deployment
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10000;
+                `;
+                const modalContent = document.createElement('div');
+                modalContent.style.cssText = `
+                    background: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    max-width: 600px;
+                    width: 90%;
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                    max-height: 80vh;
+                    overflow-y: auto;
+                `;
+                modalContent.innerHTML = `
+                    <h2 style="margin-top: 0; color: #333;">🎉 Deployment Ready!</h2>
+                    <div style="margin: 20px 0; line-height: 1.6;">
+                        ${data.message.replace(/\n/g, '<br>')}
+                    </div>
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                            GitHub Personal Access Token:
+                        </label>
+                        <input type="password" id="github-token-input" 
+                               placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <small style="display: block; margin-top: 5px; color: #666;">
+                            Required. <a href="https://github.com/settings/tokens/new?scopes=repo,workflow" target="_blank">Create token here</a>
+                        </small>
+                    </div>
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                            Render API Key (Optional):
+                        </label>
+                        <input type="password" id="render-key-input" 
+                               placeholder="rnd_xxxxxxxxxxxxxxxxxxxx"
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <small style="display: block; margin-top: 5px; color: #666;">
+                            Optional. Get from <a href="https://dashboard.render.com/account/settings#api-keys" target="_blank">Render Dashboard</a>
+                        </small>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                        <button id="deploy-skip-btn" style="
+                            background: #6c757d;
+                            color: white;
+                            padding: 12px 24px;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                            font-size: 14px;
+                        ">Skip Deployment</button>
+                        <button id="deploy-deny-btn" style="
+                            background: #dc3545;
+                            color: white;
+                            padding: 12px 24px;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                            font-size: 14px;
+                        ">Do NOT create GitHub repo</button>
+                        <button id="deploy-confirm-btn" style="
+                            background: #28a745;
+                            color: white;
+                            padding: 12px 24px;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                            font-size: 14px;
+                        ">Deploy Now</button>
+                    </div>
+                `;
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+                // Handle skip button
+                document.getElementById('deploy-skip-btn').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                    this.ws.send(JSON.stringify({
+                        type: 'github_deployment_response',
+                        github_token: null,
+                        render_api_key: null
+                    }));
+                    this.addChatMessage('✋ **User**: Skipped deployment. Files are ready in the generated_code folder.', 'user');
+                });
+                // Handle deny button (do NOT create repo)
+                document.getElementById('deploy-deny-btn').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                    this.ws.send(JSON.stringify({
+                        type: 'github_deployment_response',
+                        github_token: 'deny',
+                        render_api_key: null
+                    }));
+                    this.addChatMessage('🚫 **User**: Chose NOT to create a GitHub repository. No repo will be created.', 'user');
+                });
+                // Handle deploy button
+                document.getElementById('deploy-confirm-btn').addEventListener('click', () => {
+                    const githubToken = document.getElementById('github-token-input').value.trim();
+                    const renderKey = document.getElementById('render-key-input').value.trim();
+                    if (!githubToken) {
+                        alert('GitHub token is required for deployment!');
+                        return;
+                    }
+                    document.body.removeChild(modal);
+                    this.ws.send(JSON.stringify({
+                        type: 'github_deployment_response',
+                        github_token: githubToken,
+                        render_api_key: renderKey || null
+                    }));
+                    this.addChatMessage('🚀 **User**: Confirmed deployment. Proceeding with GitHub and Render setup...', 'user');
+                });
             }
             sendMessage() {
                 this.addLogMessage('Send button clicked.', 'info');

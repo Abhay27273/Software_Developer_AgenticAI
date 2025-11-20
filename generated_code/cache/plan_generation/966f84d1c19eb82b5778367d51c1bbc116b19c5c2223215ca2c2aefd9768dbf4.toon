@@ -1,0 +1,7 @@
+PLAN<mario001>|Mario-like Platformer MVP|Develop a basic 2D platformer game with player movement, level, and simple interactions.
+TASK<001>|Initialize Game Engine|Set up a basic 2D game engine project (e.g., Godot, Unity 2D).|1|[]|4.0|simple|dev_agent
+TASK<002>|Implement Player Character|Create player character sprite, movement (walk, jump), and basic physics.|2|[001]|6.0|medium|dev_agent
+TASK<003>|Design First Level & Assets|Create a simple level layout, background, ground tiles, and basic enemy sprites.|3|[001]|5.0|medium|dev_agent
+TASK<004>|Implement Collisions & Interactions|Set up collision detection for player with ground, enemies, and simple coin collection.|4|[002,003]|7.0|medium|dev_agent
+TASK<005>|Test Core Game Mechanics|Perform thorough testing of player movement, collisions, enemy interactions, and level progression.|5|[004]|8.0|medium|qa_agent
+TASK<006>|Configure Build Pipeline|Set up initial build process for target platform (e.g., desktop executable).|6|[004]|3.0|simple|ops_agent

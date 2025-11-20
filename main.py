@@ -1,6 +1,6 @@
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, BackgroundTasks
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +22,14 @@ import logging
 import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+
+# Import API routers for production enhancement features
+from api.routes import (
+    project_router,
+    modification_router,
+    template_router,
+    documentation_router
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +60,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include API routers for production enhancement features
+app.include_router(project_router)
+app.include_router(modification_router)
+app.include_router(template_router)
+app.include_router(documentation_router)
+
 # --- Define base directory for generated files for security checks ---
 GENERATED_CODE_ROOT = BASE_DIR / "generated_code"
 
@@ -59,11 +73,23 @@ GENERATED_CODE_ROOT = BASE_DIR / "generated_code"
 # Global managers
 websocket_manager = WebSocketManager()
 
+# Configure WebSocket manager for API routes (Task 9.1)
+from api.routes import set_websocket_manager
+set_websocket_manager(websocket_manager)
+
+# Initialize Project Manager
+from utils.project_manager import ProjectManager
+import config
+project_manager = ProjectManager(config.PROJECTS_ROOT)
+
 # Initialize agents - Pass the websocket_manager to agents
 planner_agent = PlannerAgent(websocket_manager=websocket_manager)
 dev_agent = DevAgent(websocket_manager=websocket_manager)
 qa_agent = QAAgent(websocket_manager=websocket_manager)
 ops_agent = OpsAgent(websocket_manager=websocket_manager, generated_code_root=GENERATED_CODE_ROOT) # NEW: Initialize the OpsAgent
+
+# Track current project
+current_project_name = None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -140,6 +166,83 @@ async def get_file_content(path: str):
         logger.error(f"Error reading file {file_path}: {e}")
         return f"[Error] Could not read file: {e}"
 
+
+# --- PROJECT MANAGEMENT ENDPOINTS ---
+
+@app.get("/api/project/tree")
+async def get_project_tree():
+    """Get hierarchical project tree with current and archived projects."""
+    try:
+        tree = project_manager.get_project_tree()
+        return JSONResponse(content=tree)
+    except Exception as e:
+        logger.error(f"Error getting project tree: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/project/current")
+async def get_current_project():
+    """Get metadata for the current project."""
+    try:
+        metadata = project_manager.metadata.get("current")
+        if not metadata:
+            return JSONResponse(content={"message": "No active project"}, status_code=404)
+        return JSONResponse(content=metadata)
+    except Exception as e:
+        logger.error(f"Error getting current project: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/project/archived")
+async def get_archived_projects():
+    """Get list of all archived projects."""
+    try:
+        archived = project_manager.get_archived_projects()
+        return JSONResponse(content={"archived": archived})
+    except Exception as e:
+        logger.error(f"Error getting archived projects: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/project/new")
+async def create_new_project(request: Request):
+    """Create a new project and archive the current one."""
+    try:
+        data = await request.json()
+        user_request = data.get("request", "new_project")
+        
+        project_info = project_manager.create_new_project(user_request)
+        
+        # Broadcast to all connected clients
+        await websocket_manager.broadcast_message({
+            "type": "project_created",
+            "project_name": project_info["name"],
+            "timestamp": project_info["timestamp"]
+        })
+        
+        return JSONResponse(content=project_info)
+    except Exception as e:
+        logger.error(f"Error creating new project: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/project/download")
+async def download_project(project_type: str = "current"):
+    """Download all files in a project as ZIP archive."""
+    from fastapi.responses import FileResponse
+    try:
+        zip_path = project_manager.download_all_files(project_type)
+        return FileResponse(
+            path=zip_path,
+            media_type="application/zip",
+            filename=Path(zip_path).name,
+            headers={"Content-Disposition": f"attachment; filename={Path(zip_path).name}"}
+        )
+    except Exception as e:
+        logger.error(f"Error downloading project: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -163,6 +266,19 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timestamp": datetime.now().isoformat()
                     }, websocket)
                     continue
+
+                # Create new project and archive previous one
+                global current_project_name
+                project_info = project_manager.create_new_project(requirements)
+                current_project_name = project_info["name"]
+                
+                # Notify frontend about new project creation
+                await websocket_manager.broadcast_message({
+                    "type": "project_created",
+                    "project_name": project_info["name"],
+                    "timestamp": project_info["timestamp"],
+                    "message": f"📁 New project created: {project_info['name']}"
+                })
 
                 # Notify frontend that planning has started (via broadcast for all connected clients)
                 await websocket_manager.broadcast_message({
@@ -667,13 +783,270 @@ class FileChangeHandler(FileSystemEventHandler):
             except Exception as e:
                 logger.error(f"Error in FileChangeHandler: {e}", exc_info=True)
 
+# --- QA Task Execution and Ops Triggering ---
+
+async def execute_qa_task(task: Task, websocket: WebSocket):
+    """Execute QA task with real-time progress tracking."""
+    try:
+        logger.info(f"🧪 QA Agent starting: {task.title}")
+        
+        # Send QA start notification
+        await websocket_manager.send_personal_message({
+            "type": "qa_started",
+            "task_id": task.id,
+            "title": task.title,
+            "message": f"🧪 Running QA tests for '{task.title}'...",
+            "timestamp": datetime.now().isoformat()
+        }, websocket)
+        
+        # Execute QA task
+        qa_result = await qa_agent.execute_task(task)
+        
+        # Send QA completion notification
+        if qa_result.status == TaskStatus.COMPLETED:
+            await websocket_manager.send_personal_message({
+                "type": "qa_complete",
+                "task_id": task.id,
+                "title": task.title,
+                "message": f"✅ QA completed for '{task.title}'",
+                "timestamp": datetime.now().isoformat(),
+                "qa_result": qa_result.result,
+                "test_summary": {
+                    "total_tests": qa_result.metadata.get("total_tests", 0),
+                    "passed_tests": qa_result.metadata.get("passed_tests", 0),
+                    "failed_tests": qa_result.metadata.get("failed_tests", 0)
+                }
+            }, websocket)
+            
+            logger.info(f"✅ QA COMPLETE: {task.id} - Ready for Ops deployment")
+            
+            # Trigger Ops Agent if all QA tasks complete
+            await check_and_trigger_ops(websocket)
+            
+        elif qa_result.status == TaskStatus.FAILED:
+            await websocket_manager.send_personal_message({
+                "type": "qa_failed",
+                "task_id": task.id,
+                "title": task.title,
+                "message": f"❌ QA failed for '{task.title}'",
+                "timestamp": datetime.now().isoformat(),
+                "error": qa_result.result
+            }, websocket)
+            
+            logger.error(f"❌ QA FAILED: {task.id} - {qa_result.result}")
+        
+        return qa_result
+        
+    except Exception as e:
+        logger.error(f"QA task execution error: {e}", exc_info=True)
+        await websocket_manager.send_personal_message({
+            "type": "qa_error",
+            "task_id": task.id,
+            "message": f"Error in QA: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }, websocket)
+        raise
+
+
+async def check_and_trigger_ops(websocket: WebSocket):
+    """Check if all QA tasks are complete and trigger Ops Agent."""
+    try:
+        if not planner_agent.current_plan:
+            return
+        
+        # Check if all dev tasks have been QA'd
+        all_qa_complete = all(
+            task.status == TaskStatus.COMPLETED 
+            for task in planner_agent.current_plan.tasks 
+            if task.agent_type == "qa_agent"
+        )
+        
+        if all_qa_complete:
+            logger.info("🚀 All QA complete - Triggering Ops Agent")
+            
+            await websocket_manager.send_personal_message({
+                "type": "ops_trigger",
+                "message": "🚀 All QA passed! Starting deployment...",
+                "timestamp": datetime.now().isoformat()
+            }, websocket)
+            
+            # Create deployment task
+            deployment_task = Task(
+                id=f"deploy_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                title="Production Deployment",
+                description=f"Deploy {len([t for t in planner_agent.current_plan.tasks if t.agent_type == 'dev_agent'])} completed components",
+                priority=10,
+                status=TaskStatus.PENDING,
+                agent_type="ops_agent"
+            )
+            
+            # Execute Ops Agent
+            ops_result = await ops_agent.execute_task(deployment_task)
+            
+            await websocket_manager.send_personal_message({
+                "type": "ops_complete",
+                "task_id": deployment_task.id,
+                "message": f"✅ Deployment {ops_result.status.value.lower()}: {ops_result.result}",
+                "timestamp": datetime.now().isoformat(),
+                "deployment_urls": ops_result.metadata.get("deployment_urls", []),
+                "github_url": ops_result.metadata.get("github_url"),
+                "timestamp": datetime.now().isoformat()
+            }, websocket)
+        else:
+            logger.info("⚠️ Not all QA tasks are complete yet.")
+        
+    except Exception as e:
+        logger.error(f"Ops triggering error: {e}", exc_info=True)
+        await websocket_manager.send_personal_message({
+            "type": "ops_error",
+            "message": f"Error triggering Ops: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }, websocket)
+
+# NEW: API endpoint to manually trigger Ops deployment
+@app.post("/api/trigger-ops")
+async def trigger_ops_deployment(background_tasks: BackgroundTasks):
+    """
+    Manual trigger for Ops Agent deployment (testing purposes).
+    
+    Returns:
+        Deployment status and details
+    """
+    try:
+        if not planner_agent.current_plan:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "No active plan found. Please create a plan first."
+                }
+            )
+        
+        # Get all completed dev tasks
+        dev_tasks_completed = [
+            task for task in planner_agent.current_plan.tasks 
+            if task.agent_type == "dev_agent" and task.status == TaskStatus.COMPLETED
+        ]
+        
+        if not dev_tasks_completed:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "No completed dev tasks to deploy"
+                }
+            )
+        
+        # Create deployment task
+        deployment_id = f"manual_deploy_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        deployment_task = Task(
+            id=deployment_id,
+            title="Manual Production Deployment",
+            description=f"Deploy {len(dev_tasks_completed)} completed components",
+            priority=10,
+            status=TaskStatus.PENDING,
+            agent_type="ops_agent",
+            metadata={
+                "trigger_type": "manual",
+                "deployed_tasks": [t.id for t in dev_tasks_completed]
+            }
+        )
+        
+        # Execute Ops Agent
+        logger.info(f"🚀 Manual Ops Agent trigger initiated: {deployment_id}")
+        ops_result = await ops_agent.execute_task(deployment_task)
+        
+        # Parse deployment result
+        deployment_urls = []
+        github_url = None
+        
+        if ops_result.metadata:
+            deployment_urls = ops_result.metadata.get("deployment_urls", [])
+            github_url = ops_result.metadata.get("github_url")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "deployment_id": deployment_id,
+                "status": ops_result.status.value,
+                "message": ops_result.result[:500] if ops_result.result else "Deployment initiated",
+                "deployed_tasks": len(dev_tasks_completed),
+                "github_url": github_url,
+                "deployment_urls": deployment_urls,
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Manual Ops trigger failed: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+
+
+@app.get("/api/deployment-status")
+async def get_deployment_status():
+    """
+    Get current deployment status and history.
+    
+    Returns:
+        Deployment statistics and recent deployments
+    """
+    try:
+        if not planner_agent.current_plan:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "has_active_plan": False,
+                    "message": "No active plan"
+                }
+            )
+        
+        # Count tasks by status
+        dev_completed = len([
+            t for t in planner_agent.current_plan.tasks 
+            if t.agent_type == "dev_agent" and t.status == TaskStatus.COMPLETED
+        ])
+        
+        qa_completed = len([
+            t for t in planner_agent.current_plan.tasks 
+            if t.agent_type == "qa_agent" and t.status == TaskStatus.COMPLETED
+        ])
+        
+        ops_completed = len([
+            t for t in planner_agent.current_plan.tasks 
+            if t.agent_type == "ops_agent" and t.status == TaskStatus.COMPLETED
+        ])
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "has_active_plan": True,
+                "plan_id": planner_agent.current_plan.id,
+                "statistics": {
+                    "dev_completed": dev_completed,
+                    "qa_completed": qa_completed,
+                    "ops_completed": ops_completed,
+                    "ready_for_deployment": dev_completed > 0 and qa_completed > 0
+                },
+                "can_deploy": dev_completed > 0,
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Deployment status check failed: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=7860,
-        reload=False,
-        reload_excludes=[
-            str(GENERATED_CODE_ROOT),
-        ],
-    )
+    uvicorn.run(app, host="0.0.0.0", port=7860)

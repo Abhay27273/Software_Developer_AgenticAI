@@ -395,4 +395,3 @@ def test_main_function_exit_on_init_failure(mocker):
     assert excinfo.value.code == 1
     mock_initialize_app.assert_called_once()
     mock_sys_exit.assert_not_called() # sys.exit from initialize_app already terminated.
-```

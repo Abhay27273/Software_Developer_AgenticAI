@@ -1,0 +1,7 @@
+PLAN<streamapp1>|YouTube-like Streaming App MVP|Core features for video upload, playback, and user management
+TASK<001>|Backend API & DB Setup|Initialize backend framework, setup database schema for users and videos|1|[]|6.0|medium|dev_agent
+TASK<002>|Video Upload & Encoding Service|Implement API for video upload, integrate with a video processing/encoding library|2|[001]|8.0|complex|dev_agent
+TASK<003>|Frontend UI - Player & Listing|Develop user interface for browsing videos, video playback page, and basic search|3|[001,002]|7.0|medium|dev_agent
+TASK<004>|User Authentication & Profiles|Implement user registration, login, session management, and basic user profile pages|4|[001,003]|5.0|medium|dev_agent
+TASK<005>|End-to-End System Testing|Perform comprehensive testing of video upload, playback, user auth, and data integrity|5|[002,003,004]|6.0|medium|qa_agent
+TASK<006>|Initial Cloud Deployment Setup|Configure cloud resources (VMs, database, storage), setup CI/CD for initial deployment|6|[005]|7.0|complex|ops_agent

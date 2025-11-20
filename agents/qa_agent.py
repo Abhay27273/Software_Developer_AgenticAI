@@ -18,6 +18,7 @@ from models.enums import TaskStatus
 from parse.websocket_manager import WebSocketManager
 from utils.llm_setup import ask_llm, LLMError
 from utils.cache_manager import load_cached_content, save_cached_content
+from utils.qa_config import QAConfig
 from config import DEV_OUTPUT_DIR
 
 # Configure logging
@@ -51,6 +52,7 @@ class QAAgent:
     def __init__(self, websocket_manager: WebSocketManager):
         self.agent_id = "qa_agent"
         self.websocket_manager = websocket_manager
+        self.qa_config = QAConfig.from_env()
         self.workflow = self._create_workflow()
         
     def _create_workflow(self) -> StateGraph:
@@ -96,57 +98,21 @@ class QAAgent:
 
     async def execute_task(self, task: Task) -> Task:
         """
-        Execute QA workflow with automatic fixing using LangGraph.
+        Execute QA workflow based on configured mode (fast or deep).
         """
         await self.websocket_manager.broadcast_message({
             "agent_id": self.agent_id,
             "type": "qa_start",
             "task_id": task.id,
-            "message": f"🧪 QA Agent: Starting comprehensive testing for '{task.title}'",
+            "message": f"🧪 QA Agent: Starting {self.qa_config.mode.upper()} mode testing for '{task.title}'",
             "timestamp": datetime.now().isoformat()
         })
 
         try:
-            # Initialize QA state
-            initial_state: QAState = {
-                "task": task,
-                "code_files": {},
-                "test_results": [],
-                "issues_found": [],
-                "fix_attempts": 0,
-                "max_fix_attempts": 5,
-                "current_file": "",
-                "messages": [HumanMessage(content=f"Starting QA for task: {task.title}")],
-                "qa_status": "testing"
-            }
-            
-            # Run the LangGraph workflow
-            final_state = await self._run_workflow(initial_state)
-            
-            # Set task status based on final QA results
-            if final_state["qa_status"] == "completed":
-                task.status = TaskStatus.COMPLETED
-                await self.websocket_manager.broadcast_message({
-                    "agent_id": self.agent_id,
-                    "type": "qa_completed",
-                    "task_id": task.id,
-                    "message": f"✅ QA Agent: All tests passed for '{task.title}'",
-                    "fixes_applied": final_state["fix_attempts"],
-                    "timestamp": datetime.now().isoformat()
-                })
+            if self.qa_config.mode == "fast":
+                return await self._fast_qa_mode(task)
             else:
-                task.status = TaskStatus.FAILED
-                failure_message = f"❌ QA Agent: Testing failed for '{task.title}' after {final_state['fix_attempts']} fix attempts"
-                if final_state["fix_attempts"] >= final_state["max_fix_attempts"]:
-                    failure_message += ". Escalating to human review for final resolution."
-                await self.websocket_manager.broadcast_message({
-                    "agent_id": self.agent_id,
-                    "type": "qa_failed",
-                    "task_id": task.id,
-                    "message": failure_message,
-                    "issues": final_state["issues_found"],
-                    "timestamp": datetime.now().isoformat()
-                })
+                return await self._deep_qa_mode(task)
 
         except Exception as e:
             task.status = TaskStatus.FAILED
@@ -160,6 +126,345 @@ class QAAgent:
             })
 
         return task
+
+    async def _fast_qa_mode(self, task: Task) -> Task:
+        """
+        Fast QA mode: Iterates through each file, performs a quick LLM logic review,
+        and broadcasts the result for each file in real-time.
+        """
+        all_passed = True
+        all_issues = []
+
+        try:
+            async with asyncio.timeout(self.qa_config.fast_timeout):
+                code_files = await self._load_generated_code(task)
+                
+                if not code_files:
+                    task.status = TaskStatus.FAILED
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id, "type": "qa_failed", "task_id": task.id,
+                        "message": f"⚠️ No code files found for '{task.title}'", "timestamp": datetime.now().isoformat()
+                    })
+                    return task
+
+                for filename, content in code_files.items():
+                    await self.websocket_manager.broadcast_message({
+                        "type": "qa_testing_file", "agent_id": self.agent_id, "task_id": task.id,
+                        "file_name": filename, "timestamp": datetime.now().isoformat()
+                    })
+
+                    review_result = await self._review_single_file(task, filename, content)
+                    
+                    file_passed = review_result.get("passed", False)
+                    issues = review_result.get("issues", [])
+                    
+                    if not file_passed:
+                        all_passed = False
+                        all_issues.extend(issues)
+
+                    await self.websocket_manager.broadcast_message({
+                        "type": "qa_file_result", "agent_id": self.agent_id, "task_id": task.id,
+                        "file_name": filename, "passed": file_passed,
+                        "message": f"{len(issues)} issue(s) found" if issues else "No issues found",
+                        "details": "\n".join([i['description'] for i in issues]) if issues else "Clean.",
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                # Final task status
+                if all_passed:
+                    task.status = TaskStatus.COMPLETED
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id, "type": "qa_completed", "task_id": task.id,
+                        "message": f"✅ QA Agent (Fast): All files passed logic review for '{task.title}'.",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                else:
+                    task.status = TaskStatus.FAILED
+                    task.metadata["qa_issues"] = all_issues
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id, "type": "qa_failed", "task_id": task.id,
+                        "message": f"❌ QA Agent (Fast): Found {len(all_issues)} issues in '{task.title}'. Sending for revision.",
+                        "issues": all_issues, "timestamp": datetime.now().isoformat()
+                    })
+                
+                return task
+                
+        except asyncio.TimeoutError:
+            task.status = TaskStatus.FAILED
+            logger.error(f"Fast QA timeout for task {task.id}")
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id, "type": "qa_timeout", "task_id": task.id,
+                "message": f"⏱️ QA Agent (Fast): Timeout after {self.qa_config.fast_timeout}s for '{task.title}'",
+                "timestamp": datetime.now().isoformat()
+            })
+            return task
+
+    async def _review_single_file(self, task: Task, filename: str, code_content: str) -> Dict:
+        """Performs LLM logic review on a single file."""
+        prompt = f"""You are a code quality reviewer. Review the following Python file.
+
+Task: {task.title}
+File: {filename}
+```python
+{code_content}
+```
+
+Provide a FAST logic review focusing on critical bugs, security issues, and major structure problems.
+
+Return your review as JSON with this exact structure:
+{{
+    "passed": <boolean>,
+    "issues": [
+        {{"type": "bug|security|structure", "description": "..."}}
+    ]
+}}
+
+- If the code is good, return "passed": true and an empty issues list.
+- If issues are found, return "passed": false and describe them.
+Focus on critical issues only. Be concise."""
+
+        try:
+            response = await ask_llm(
+                prompt, 
+                model="gemini-2.5-flash",
+                metadata={"agent": self.agent_id, "prompt_name": "fast_qa_single_file_review"}
+            )
+            
+            json_start = response.find("{")
+            json_end = response.rfind("}") + 1
+            
+            if json_start != -1 and json_end != -1:
+                json_str = response[json_start:json_end]
+                result = json.loads(json_str)
+                # Ensure keys exist
+                result.setdefault("passed", not result.get("issues"))
+                result.setdefault("issues", [])
+                return result
+            else:
+                logger.warning(f"No JSON found in LLM response for file {filename}")
+                return {"passed": False, "issues": [{"type": "parse_error", "description": "Failed to parse LLM review"}]}
+                
+        except (json.JSONDecodeError, Exception) as e:
+            logger.error(f"LLM review error for file {filename}: {e}")
+            return {"passed": False, "issues": [{"type": "error", "description": f"Review failed: {str(e)}"}]}
+
+    def _truncate_code_for_review(self, code_files: Dict[str, str]) -> Dict[str, str]:
+        """Truncate code files to stay within token limits."""
+        truncated = {}
+        total_chars = 0
+        
+        for file_path, content in code_files.items():
+            if total_chars >= self.qa_config.total_code_limit:
+                break
+                
+            # Truncate individual file
+            if len(content) > self.qa_config.max_code_chars_per_file:
+                truncated[file_path] = content[:self.qa_config.max_code_chars_per_file] + "\n... (truncated)"
+                total_chars += self.qa_config.max_code_chars_per_file
+            else:
+                truncated[file_path] = content
+                total_chars += len(content)
+        
+        return truncated
+
+    async def _llm_logic_review(self, task: Task, code_files: Dict[str, str]) -> Dict:
+        """
+        Single LLM call for logic review with structured JSON output.
+        Returns: {"confidence": float, "issues": [{"type": str, "description": str, "file": str}]}
+        """
+        # Format code for review
+        code_context = "\n\n".join([
+            f"File: {file_path}\n```python\n{content}\n```"
+            for file_path, content in code_files.items()
+        ])
+        
+        prompt = f"""You are a code quality reviewer. Review the following code for a task:
+
+Task: {task.title}
+Description: {task.description}
+
+Code files:
+{code_context}
+
+Provide a FAST logic review focusing on:
+1. Critical bugs (syntax errors, runtime errors, logic flaws)
+2. Security issues
+3. Code structure and organization
+
+Return your review as JSON with this exact structure:
+{{
+    "confidence": <float 0.0-1.0>,
+    "issues": [
+        {{"type": "bug|security|structure", "description": "...", "file": "filename.py"}}
+    ]
+}}
+
+Guidelines:
+- confidence 0.9-1.0: Excellent code, no issues
+- confidence 0.8-0.9: Good code, minor improvements possible
+- confidence 0.5-0.8: Acceptable code with some concerns
+- confidence 0.0-0.5: Serious issues requiring fixes
+
+Focus on critical issues only. Be concise."""
+
+        try:
+            response = await ask_llm(
+                prompt, 
+                model="gemini-2.5-flash",
+                metadata={"agent": self.agent_id, "prompt_name": "fast_qa_review"}
+            )
+            
+            # Extract JSON from response
+            json_start = response.find("{")
+            json_end = response.rfind("}") + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = response[json_start:json_end]
+                result = json.loads(json_str)
+                return result
+            else:
+                logger.warning(f"No JSON found in LLM response for task {task.id}")
+                return {"confidence": 0.5, "issues": [{"type": "parse_error", "description": "Failed to parse LLM review", "file": "unknown"}]}
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error in LLM review for task {task.id}: {e}")
+            return {"confidence": 0.5, "issues": [{"type": "parse_error", "description": f"JSON error: {str(e)}", "file": "unknown"}]}
+        except Exception as e:
+            logger.error(f"LLM review error for task {task.id}: {e}")
+            return {"confidence": 0.3, "issues": [{"type": "error", "description": f"Review error: {str(e)}", "file": "unknown"}]}
+
+    async def _deep_qa_mode(self, task: Task) -> Task:
+        """
+        Deep QA mode: Fast QA + focused pytest generation + execution + one fix attempt.
+        Target: <90 seconds with hard timeout.
+        """
+        try:
+            async with asyncio.timeout(self.qa_config.deep_timeout):
+                # Start with fast QA
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "qa_progress",
+                    "task_id": task.id,
+                    "message": f"🔍 Deep QA: Starting fast logic review...",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                fast_task = await self._fast_qa_mode(task)
+                confidence = fast_task.metadata.get("qa_confidence", 0.5) if fast_task.metadata else 0.5
+                
+                # If fast QA confidence is high enough, skip expensive testing
+                if confidence >= 0.9:
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id,
+                        "type": "qa_skip_tests",
+                        "task_id": task.id,
+                        "message": f"⚡ Deep QA: High confidence ({confidence:.2f}), skipping test execution",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    fast_task.metadata["qa_mode"] = "deep"
+                    return fast_task
+                
+                # Continue with original deep workflow for lower confidence
+                await self.websocket_manager.broadcast_message({
+                    "agent_id": self.agent_id,
+                    "type": "qa_progress",
+                    "task_id": task.id,
+                    "message": f"🧪 Deep QA: Running comprehensive tests (confidence: {confidence:.2f})...",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                # Use existing LangGraph workflow with reduced max attempts
+                initial_state: QAState = {
+                    "task": task,
+                    "code_files": {},
+                    "test_results": [],
+                    "issues_found": [],
+                    "fix_attempts": 0,
+                    "max_fix_attempts": 1,  # Only one fix attempt in deep mode
+                    "current_file": "",
+                    "messages": [HumanMessage(content=f"Starting Deep QA for task: {task.title}")],
+                    "qa_status": "testing"
+                }
+                
+                final_state = await self._run_workflow(initial_state)
+                
+                # Update task status
+                if final_state["qa_status"] == "completed":
+                    task.status = TaskStatus.COMPLETED
+                    task.metadata["qa_mode"] = "deep"
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id,
+                        "type": "qa_completed",
+                        "task_id": task.id,
+                        "message": f"✅ QA Agent (Deep): All tests passed for '{task.title}'",
+                        "fixes_applied": final_state["fix_attempts"],
+                        "timestamp": datetime.now().isoformat()
+                    })
+                else:
+                    task.status = TaskStatus.FAILED
+                    task.metadata["qa_mode"] = "deep"
+                    await self.websocket_manager.broadcast_message({
+                        "agent_id": self.agent_id,
+                        "type": "qa_failed",
+                        "task_id": task.id,
+                        "message": f"❌ QA Agent (Deep): Testing failed for '{task.title}'",
+                        "issues": final_state["issues_found"],
+                        "timestamp": datetime.now().isoformat()
+                    })
+                
+                return task
+                
+        except asyncio.TimeoutError:
+            task.status = TaskStatus.FAILED
+            logger.error(f"Deep QA timeout for task {task.id}")
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "qa_timeout",
+                "task_id": task.id,
+                "message": f"⏱️ QA Agent (Deep): Timeout after {self.qa_config.deep_timeout}s for '{task.title}'",
+                "timestamp": datetime.now().isoformat()
+            })
+            return task
+
+    async def _load_generated_code(self, task: Task) -> Dict[str, str]:
+        """Load generated code files for the task."""
+        code_files = {}
+        
+        try:
+            # Clean task title to match dev agent's directory naming convention
+            clean_title = task.title.lower()
+            # Remove common task prefixes (same logic as dev_agent)
+            prefixes_to_remove = ['define', 'create', 'implement', 'develop', 'build', 'setup', 'configure']
+            for prefix in prefixes_to_remove:
+                if clean_title.startswith(prefix + ' '):
+                    clean_title = clean_title[len(prefix) + 1:]
+                    break
+            
+            # Clean the title for use as folder name (same logic as dev_agent)
+            safe_task_title = "".join(c if c.isalnum() else "_" for c in clean_title).strip('_')
+            safe_task_title = "_".join(filter(None, safe_task_title.split('_')))[:50]
+            
+            # Look for directory matching the pattern
+            task_output_dir = Path(DEV_OUTPUT_DIR) / f"plan_{safe_task_title}"
+            
+            if not task_output_dir.exists():
+                logger.warning(f"Task output directory not found: {task_output_dir}")
+                return code_files
+            
+            # Load all Python files from the directory
+            for py_file in task_output_dir.glob("*.py"):
+                try:
+                    content = py_file.read_text(encoding="utf-8")
+                    code_files[str(py_file.relative_to(DEV_OUTPUT_DIR))] = content
+                except Exception as e:
+                    logger.error(f"Error reading file {py_file}: {e}")
+            
+            logger.info(f"Loaded {len(code_files)} code files for task {task.id}")
+            
+        except Exception as e:
+            logger.error(f"Error loading generated code for task {task.id}: {e}")
+        
+        return code_files
 
     async def _run_workflow(self, initial_state: QAState) -> QAState:
         """Run the LangGraph workflow asynchronously."""
@@ -269,6 +574,15 @@ class QAAgent:
         })
         
         for filename, code_content in state["code_files"].items():
+            # Announce testing this file
+            await self.websocket_manager.broadcast_message({
+                "type": "qa_testing_file",
+                "agent_id": self.agent_id,
+                "task_id": task.id,
+                "file_name": filename,
+                "timestamp": datetime.now().isoformat()
+            })
+            
             file_results = {
                 "filename": filename,
                 "syntax_check": await self._check_syntax(filename, code_content),
@@ -278,7 +592,37 @@ class QAAgent:
             }
             test_results.append(file_results)
             
-            # Report progress
+            # Determine if file passed
+            passed = (
+                file_results["syntax_check"].get("passed", False) and
+                file_results["style_check"].get("passed", True) and
+                file_results["runtime_check"].get("passed", True)
+            )
+            
+            # Get summary of issues
+            issues = []
+            if not file_results["syntax_check"].get("passed", False):
+                issues.extend(file_results["syntax_check"].get("issues", []))
+            if not file_results["style_check"].get("passed", True):
+                issues.extend(file_results["style_check"].get("issues", []))
+            if not file_results["runtime_check"].get("passed", True):
+                issues.extend(file_results["runtime_check"].get("issues", []))
+            
+            issue_summary = f"{len(issues)} issue(s) found" if issues else "No issues found"
+            
+            # Send result message
+            await self.websocket_manager.broadcast_message({
+                "type": "qa_file_result",
+                "agent_id": self.agent_id,
+                "task_id": task.id,
+                "file_name": filename,
+                "passed": passed,
+                "message": issue_summary,
+                "details": issue_summary,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Report progress (original)
             await self.websocket_manager.broadcast_message({
                 "agent_id": self.agent_id,
                 "type": "qa_file_tested",
@@ -409,7 +753,10 @@ class QAAgent:
         return state
 
     async def _communicate_with_dev_agent(self, state: QAState) -> QAState:
-        """Communicate with Dev Agent for complex issues that need manual intervention."""
+        """
+        Communicate with Dev Agent for one-time fix.
+        After fix, file goes directly to Ops without retesting.
+        """
         task = state["task"]
         state["fix_attempts"] += 1
         
@@ -417,36 +764,57 @@ class QAAgent:
             "agent_id": self.agent_id,
             "type": "qa_dev_communication",
             "task_id": task.id,
-            "message": "📞 QA Agent: Requesting Dev Agent to fix complex issues...",
+            "message": "📞 QA Agent: Requesting ONE-TIME fix from Dev Agent (no retest after fix)...",
             "issues": state["issues_found"],
+            "issues_count": len(state["issues_found"]),
             "timestamp": datetime.now().isoformat()
         })
         
+        # Log detailed issues for Dev
+        logger.info(f"🐛 QA found {len(state['issues_found'])} issues in {task.id}")
+        for idx, issue in enumerate(state["issues_found"], 1):
+            logger.info(
+                f"  Issue {idx}: {issue.get('issue_type', 'unknown')} - "
+                f"{issue.get('description', 'No description')}"
+            )
+        
         try:
-            # Import here to avoid circular imports
-            from agents.dev_agent import DevAgent
+            # NOTE: We're NOT actually calling DevAgent.handle_qa_feedback here
+            # because the event router will handle routing to the fix queue.
+            # This method just communicates the issues to the system.
             
-            # Create a Dev Agent instance (in a real system, you'd get this from a registry)
-            dev_agent = DevAgent(self.websocket_manager)
+            # Mark that issues have been communicated to Dev
+            state["qa_status"] = "communicated_to_dev"
             
-            # Request Dev Agent to fix the issues
-            fixed_task = await dev_agent.handle_qa_feedback(task, state["issues_found"])
+            # Store issues in task metadata for Dev to access
+            task.metadata['qa_issues'] = state["issues_found"]
+            task.metadata['qa_test_results'] = state["test_results"]
+            task.metadata['requires_dev_fix'] = True
             
-            if fixed_task.status == TaskStatus.COMPLETED:
-                # Reload the fixed code files
-                state = await self._load_code_files(state)
-                state["qa_status"] = "testing"  # Re-test after fixes
-                state["issues_found"] = []  # Clear issues for re-testing
-                
-                await self.websocket_manager.broadcast_message({
-                    "agent_id": self.agent_id,
-                    "type": "qa_dev_fixes_received",
-                    "task_id": task.id,
-                    "message": "✅ QA Agent: Received fixes from Dev Agent, re-testing...",
-                    "timestamp": datetime.now().isoformat()
-                })
-            else:
-                state["qa_status"] = "failed"
+            await self.websocket_manager.broadcast_message({
+                "agent_id": self.agent_id,
+                "type": "qa_dev_fix_requested",
+                "task_id": task.id,
+                "message": (
+                    f"📋 QA Agent: Documented {len(state['issues_found'])} issues for Dev fix. "
+                    f"File will go to Ops after fix (no retest)."
+                ),
+                "issues_summary": [
+                    {
+                        'type': issue.get('issue_type', 'unknown'),
+                        'file': issue.get('file_path', 'unknown'),
+                        'description': issue.get('description', '')[:100]  # Truncate for display
+                    }
+                    for issue in state["issues_found"][:5]  # Show first 5 issues
+                ],
+                "total_issues": len(state["issues_found"]),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            logger.info(
+                f"✅ QA Agent: Communicated issues for {task.id} to Dev. "
+                f"After fix, file will go directly to Ops."
+            )
                 
         except Exception as e:
             logger.error(f"QA Agent: Failed to communicate with Dev Agent: {e}")
@@ -463,11 +831,28 @@ class QAAgent:
         return state
 
     async def _finalize_qa_results(self, state: QAState) -> QAState:
-        """Finalize QA results and determine final status."""
+        """
+        Finalize QA results with new workflow:
+        - No issues: PASS (go to Ops)
+        - Issues found: FAIL (go to Dev for fix, then directly to Ops)
+        """
         if not state["issues_found"]:
             state["qa_status"] = "completed"
-        elif state["fix_attempts"] >= state["max_fix_attempts"]:
+            logger.info(f"✅ QA passed for {state['task'].id} - sending to Ops")
+        elif state["qa_status"] == "communicated_to_dev":
+            # Issues communicated to Dev - mark as failed so pipeline routes to fix
             state["qa_status"] = "failed"
+            logger.info(
+                f"📋 QA found issues in {state['task'].id}, communicated to Dev. "
+                f"After fix, file goes directly to Ops (no retest)"
+            )
+        else:
+            # Unable to handle issues
+            state["qa_status"] = "failed"
+            logger.warning(
+                f"❌ QA unable to handle issues for {state['task'].id}, "
+                f"marking as failed"
+            )
         
         return state
 
@@ -485,25 +870,47 @@ class QAAgent:
         return "analyze" if has_failures else "pass"
 
     def _should_apply_fixes(self, state: QAState) -> str:
-        """Determine if we should apply fixes, communicate with dev, or fail."""
-        if state["fix_attempts"] >= state["max_fix_attempts"]:
-            return "fail"
+        """
+        Determine fix strategy: QA only attempts ONE fix, then communicates with Dev.
+        After Dev fix, file goes directly to Ops without retesting.
+        """
+        # If we've already attempted a fix, communicate with Dev (no second attempt)
+        if state["fix_attempts"] >= 1:
+            logger.info(
+                f"🔄 QA already attempted fix. Communicating remaining issues to Dev "
+                f"(file will go to Ops after Dev fix, no retest)"
+            )
+            return "communicate"
         
         if any(issue.get("llm_failed") for issue in state["issues_found"]):
+            logger.info("🤖 LLM-related issues found, communicating with Dev")
             return "communicate"
 
-        # Check if issues are simple enough to auto-fix
+        # Check if issues are simple enough for QA to auto-fix (only once)
         simple_issues = ["syntax", "style"]
-        complex_issues = ["runtime", "test_failure"]
+        complex_issues = ["runtime", "test_failure", "logic_error"]
         
-        has_simple_issues = any(issue["issue_type"] in simple_issues for issue in state["issues_found"])
-        has_complex_issues = any(issue["issue_type"] in complex_issues for issue in state["issues_found"])
+        has_simple_issues = any(
+            issue.get("issue_type") in simple_issues 
+            for issue in state["issues_found"]
+        )
+        has_complex_issues = any(
+            issue.get("issue_type") in complex_issues 
+            for issue in state["issues_found"]
+        )
         
-        if has_simple_issues and not has_complex_issues:
+        # Only attempt simple fixes if this is our first attempt
+        if has_simple_issues and not has_complex_issues and state["fix_attempts"] == 0:
+            logger.info("🔧 QA attempting ONE-TIME simple fix (syntax/style only)")
             return "apply"
-        elif has_complex_issues:
+        elif has_complex_issues or state["fix_attempts"] > 0:
+            logger.info(
+                "📞 Complex issues or retry detected, communicating with Dev "
+                "(no further QA testing after Dev fix)"
+            )
             return "communicate"
         else:
+            logger.warning("❌ Unable to categorize issues, failing QA")
             return "fail"    
 # Helper methods for testing and fixing
 

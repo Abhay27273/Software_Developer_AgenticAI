@@ -103,3 +103,82 @@ class WebSocketManager:
                 self.disconnect(websocket)
         else:
             logger.warning(f"Attempted to stream chunk to a non-active WebSocket: {websocket.client.host}:{websocket.client.port}")
+
+    # ============================================================================
+    # PROJECT LIFECYCLE EVENTS (Task 9.1)
+    # ============================================================================
+
+    async def broadcast_project_created(self, project_data: Dict[str, Any]):
+        """
+        Broadcast a project_created event to all connected clients.
+        
+        Args:
+            project_data: Dictionary containing project details (id, name, type, status, etc.)
+        
+        Requirements: 1.1
+        """
+        event = {
+            "event_type": "project_created",
+            "timestamp": project_data.get("created_at", ""),
+            "data": {
+                "project_id": project_data.get("id"),
+                "name": project_data.get("name"),
+                "type": project_data.get("type"),
+                "status": project_data.get("status"),
+                "owner_id": project_data.get("owner_id"),
+                "description": project_data.get("description", "")
+            }
+        }
+        
+        logger.info(f"Broadcasting project_created event for project: {project_data.get('id')}")
+        await self.broadcast_message(event)
+
+    async def broadcast_project_updated(self, project_data: Dict[str, Any], updated_fields: list = None):
+        """
+        Broadcast a project_updated event to all connected clients.
+        
+        Args:
+            project_data: Dictionary containing updated project details
+            updated_fields: List of field names that were updated (optional)
+        
+        Requirements: 1.1
+        """
+        event = {
+            "event_type": "project_updated",
+            "timestamp": project_data.get("updated_at", ""),
+            "data": {
+                "project_id": project_data.get("id"),
+                "name": project_data.get("name"),
+                "type": project_data.get("type"),
+                "status": project_data.get("status"),
+                "updated_fields": updated_fields or [],
+                "description": project_data.get("description", "")
+            }
+        }
+        
+        logger.info(f"Broadcasting project_updated event for project: {project_data.get('id')}")
+        await self.broadcast_message(event)
+
+    async def broadcast_project_deleted(self, project_id: str, project_name: str = None):
+        """
+        Broadcast a project_deleted event to all connected clients.
+        
+        Args:
+            project_id: ID of the deleted project
+            project_name: Name of the deleted project (optional)
+        
+        Requirements: 1.1
+        """
+        from datetime import datetime
+        
+        event = {
+            "event_type": "project_deleted",
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": {
+                "project_id": project_id,
+                "name": project_name
+            }
+        }
+        
+        logger.info(f"Broadcasting project_deleted event for project: {project_id}")
+        await self.broadcast_message(event)

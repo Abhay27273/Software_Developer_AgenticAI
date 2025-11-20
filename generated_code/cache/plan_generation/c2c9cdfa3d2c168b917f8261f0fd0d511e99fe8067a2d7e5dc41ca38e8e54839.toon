@@ -1,0 +1,6 @@
+PLAN<mario001>|Mario Game MVP|Basic platformer with character movement, levels, and simple enemies.
+TASK<001>|Setup Game Engine|Initialize game project, configure basic rendering and input systems.|1|[]|3.0|medium|dev_agent
+TASK<002>|Player Character Implementation|Develop player movement (run, jump), animations, and collision detection.|2|[001]|6.0|complex|dev_agent
+TASK<003>|Basic Level Design & Tiles|Design a simple level layout, implement tile-based rendering and collision for environment.|3|[001]|5.0|medium|dev_agent
+TASK<004>|Implement Basic Enemy|Create a simple enemy (e.g., Goomba) with basic movement and player interaction (stomp).|4|[002,003]|7.0|complex|dev_agent
+TASK<005>|Core Gameplay Testing|Perform integration testing for player, level, and enemy interactions, identify bugs.|5|[002,003,004]|4.0|medium|qa_agent

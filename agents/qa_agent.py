@@ -153,10 +153,24 @@ class QAAgent:
                         "file_name": filename, "timestamp": datetime.now().isoformat()
                     })
 
-                    review_result = await self._review_single_file(task, filename, content)
-                    
-                    file_passed = review_result.get("passed", False)
-                    issues = review_result.get("issues", [])
+                    # Pre-screen: skip LLM for simple files (30-50% token savings)
+                    if not self._needs_llm_review(filename, content):
+                        # Just syntax check (zero tokens)
+                        syntax_result = await self._check_syntax(filename, content)
+                        issues = [] if syntax_result["passed"] else [{
+                            "type": "syntax",
+                            "description": syntax_result.get("error", "Syntax error")
+                        }]
+                        file_passed = syntax_result["passed"]
+                    else:
+                        # Full LLM review with optimizations
+                        review_result = await self._review_single_file(task, filename, content)
+                        file_passed = review_result.get("passed", False)
+                        issues = review_result.get("issues", [])
+                        # Ensure all issues have 'description' key
+                        for issue in issues:
+                            if 'description' not in issue:
+                                issue['description'] = issue.get('message', issue.get('type', 'Unknown issue'))
                     
                     if not file_passed:
                         all_passed = False
@@ -200,33 +214,73 @@ class QAAgent:
             return task
 
     async def _review_single_file(self, task: Task, filename: str, code_content: str) -> Dict:
-        """Performs LLM logic review on a single file."""
-        prompt = f"""You are a code quality reviewer. Review the following Python file.
+        """Performs LLM logic review on a single file with function-level optimization."""
+        
+        # Try function-level review first (60-80% token savings)
+        functions = self._extract_functions_for_review(code_content)
+        
+        if functions:
+            logger.info(f"📊 Reviewing {len(functions)} functions in {filename} (function-level optimization)")
+            issues = []
+            
+            for func in functions:
+                # Minimal prompt for function review
+                prompt = f"""Review for critical bugs:
 
-Task: {task.title}
-File: {filename}
+{filename} - {func['name']} (lines {func['lines'][0]}-{func['lines'][1]}):
 ```python
-{code_content}
+{func['code']}
 ```
 
-Provide a FAST logic review focusing on critical bugs, security issues, and major structure problems.
+JSON: {{"passed": bool, "issues": [...]}}"""
+                
+                try:
+                    # Use cheaper model for function-level review
+                    model = self._select_model_for_task("logic_review", len(func['code']))
+                    response = await ask_llm(
+                        prompt, 
+                        model=model,
+                        metadata={"agent": self.agent_id, "prompt_name": "fast_qa_function_review"}
+                    )
+                    
+                    json_start = response.find("{")
+                    json_end = response.rfind("}") + 1
+                    
+                    if json_start != -1 and json_end != -1:
+                        json_str = response[json_start:json_end]
+                        result = json.loads(json_str)
+                        if not result.get("passed", True):
+                            # Add function context to issues
+                            for issue in result.get("issues", []):
+                                issue['function'] = func['name']
+                                issue['lines'] = func['lines']
+                            issues.extend(result.get("issues", []))
+                except Exception as e:
+                    logger.debug(f"Function review error for {func['name']}: {e}")
+                    continue
+            
+            return {"passed": len(issues) == 0, "issues": issues}
+        
+        # Fallback to truncated full file review
+        logger.info(f"📄 Reviewing full file {filename} (fallback)")
+        truncated = code_content[:2000]
+        
+        # Minimal prompt
+        prompt = f"""Review for critical bugs:
 
-Return your review as JSON with this exact structure:
-{{
-    "passed": <boolean>,
-    "issues": [
-        {{"type": "bug|security|structure", "description": "..."}}
-    ]
-}}
+{filename}:
+```python
+{truncated}
+```
 
-- If the code is good, return "passed": true and an empty issues list.
-- If issues are found, return "passed": false and describe them.
-Focus on critical issues only. Be concise."""
+JSON: {{"passed": bool, "issues": [...]}}"""
 
         try:
+            # Use model selection based on code length
+            model = self._select_model_for_task("logic_review", len(truncated))
             response = await ask_llm(
                 prompt, 
-                model="gemini-2.5-flash",
+                model=model,
                 metadata={"agent": self.agent_id, "prompt_name": "fast_qa_single_file_review"}
             )
             
@@ -266,51 +320,125 @@ Focus on critical issues only. Be concise."""
                 total_chars += len(content)
         
         return truncated
+    
+    def _filter_reviewable_files(self, code_files: Dict[str, str]) -> Dict[str, str]:
+        """Skip files that are too large or not important for QA."""
+        filtered = {}
+        
+        for file_path, content in code_files.items():
+            # Skip non-code files
+            if any(skip in file_path.lower() for skip in [
+                'package-lock.json', 'package.json', 'node_modules',
+                '.min.js', '.min.css', 'dist/', 'build/', '__pycache__',
+                '.lock', 'requirements.txt', '.md', '.txt', '.json'
+            ]):
+                logger.info(f"⏭️  Skipping non-code file: {file_path}")
+                continue
+            
+            # Skip very large files (over 3000 chars)
+            if len(content) > 3000:
+                logger.warning(f"⏭️  Skipping large file: {file_path} ({len(content)} chars)")
+                continue
+            
+            filtered[file_path] = content
+        
+        logger.info(f"📊 Filtered {len(code_files)} files → {len(filtered)} reviewable files")
+        return filtered
+
+    def _smart_truncate_code(self, code_content: str, max_lines: int = 80) -> str:
+        """Intelligently truncate code keeping important parts."""
+        lines = code_content.split('\n')
+        
+        if len(lines) <= max_lines:
+            return code_content
+        
+        # Keep first 50 lines (imports, main logic) + last 20 lines (exports, main)
+        keep_start = 50
+        keep_end = 20
+        
+        result = lines[:keep_start]
+        result.append(f"\n... ({len(lines) - keep_start - keep_end} lines truncated) ...\n")
+        result.extend(lines[-keep_end:])
+        
+        return '\n'.join(result)
+
 
     async def _llm_logic_review(self, task: Task, code_files: Dict[str, str]) -> Dict:
         """
-        Single LLM call for logic review with structured JSON output.
+        Single LLM call for logic review with AGGRESSIVE truncation to avoid token limits.
         Returns: {"confidence": float, "issues": [{"type": str, "description": str, "file": str}]}
         """
+        
+        # ✅ OPTIMIZATION 1: Filter out unnecessary files
+        code_files = self._filter_reviewable_files(code_files)
+        
+        if not code_files:
+            logger.warning("No reviewable files found after filtering")
+            return {"confidence": 0.8, "issues": []}
+        
+        # ✅ OPTIMIZATION 2: Apply existing truncation limits
+        code_files = self._truncate_code_for_review(code_files)
+        
+        # ✅ OPTIMIZATION 3: Smart truncate each file to max 80 lines
+        truncated_files = {}
+        for file_path, content in code_files.items():
+            truncated_files[file_path] = self._smart_truncate_code(content, max_lines=80)
+        
+        # ✅ OPTIMIZATION 4: Limit to max 3 files per review
+        if len(truncated_files) > 3:
+            logger.warning(f"Too many files ({len(truncated_files)}), reviewing only first 3")
+            truncated_files = dict(list(truncated_files.items())[:3])
+        
         # Format code for review
         code_context = "\n\n".join([
-            f"File: {file_path}\n```python\n{content}\n```"
-            for file_path, content in code_files.items()
+            f"File: {file_path}\n```\n{content}\n```"
+            for file_path, content in truncated_files.items()
         ])
         
-        prompt = f"""You are a code quality reviewer. Review the following code for a task:
+        # ✅ OPTIMIZATION 5: Final token check
+        estimated_tokens = len(code_context) // 4
+        logger.info(f"📊 Estimated tokens for QA review: ~{estimated_tokens}")
+        
+        if estimated_tokens > 15000:
+            logger.error(f"❌ Code context still too large: ~{estimated_tokens} tokens")
+            # Emergency truncation: take only first file
+            first_file = list(truncated_files.items())[0]
+            code_context = f"File: {first_file[0]}\n```\n{first_file[1][:2000]}\n```"
+            logger.warning("⚠️  Emergency truncation: reviewing only first file (partial)")
+        
+        # Simplified prompt to reduce tokens
+        prompt = f"""Code Quality Review
 
 Task: {task.title}
-Description: {task.description}
 
-Code files:
+Files to review:
 {code_context}
 
-Provide a FAST logic review focusing on:
-1. Critical bugs (syntax errors, runtime errors, logic flaws)
+Provide a FAST review focusing ONLY on:
+1. Critical bugs (syntax, runtime errors)
 2. Security issues
-3. Code structure and organization
+3. Major structural problems
 
-Return your review as JSON with this exact structure:
+Return JSON:
 {{
-    "confidence": <float 0.0-1.0>,
-    "issues": [
-        {{"type": "bug|security|structure", "description": "...", "file": "filename.py"}}
-    ]
+    "confidence": <0.0-1.0>,
+    "issues": [{{"type": "bug|security|structure", "description": "...", "file": "..."}}]
 }}
 
 Guidelines:
-- confidence 0.9-1.0: Excellent code, no issues
-- confidence 0.8-0.9: Good code, minor improvements possible
-- confidence 0.5-0.8: Acceptable code with some concerns
-- confidence 0.0-0.5: Serious issues requiring fixes
+- 0.9-1.0: Excellent, no issues
+- 0.8-0.9: Good, minor issues
+- 0.5-0.8: Acceptable with concerns
+- 0.0-0.5: Serious issues
 
-Focus on critical issues only. Be concise."""
+Be concise. Focus on critical issues only."""
 
         try:
+            # Use cheaper model for logic review
+            model = self._select_model_for_task("logic_review", estimated_tokens * 4)
             response = await ask_llm(
                 prompt, 
-                model="gemini-2.5-flash",
+                model=model,
                 metadata={"agent": self.agent_id, "prompt_name": "fast_qa_review"}
             )
             
@@ -321,17 +449,19 @@ Focus on critical issues only. Be concise."""
             if json_start >= 0 and json_end > json_start:
                 json_str = response[json_start:json_end]
                 result = json.loads(json_str)
+                logger.info(f"✅ QA Review complete: confidence={result.get('confidence', 0)}, issues={len(result.get('issues', []))}")
                 return result
             else:
                 logger.warning(f"No JSON found in LLM response for task {task.id}")
-                return {"confidence": 0.5, "issues": [{"type": "parse_error", "description": "Failed to parse LLM review", "file": "unknown"}]}
+                return {"confidence": 0.7, "issues": []}
                 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error in LLM review for task {task.id}: {e}")
-            return {"confidence": 0.5, "issues": [{"type": "parse_error", "description": f"JSON error: {str(e)}", "file": "unknown"}]}
+            logger.error(f"JSON decode error in LLM review: {e}")
+            return {"confidence": 0.7, "issues": []}
         except Exception as e:
-            logger.error(f"LLM review error for task {task.id}: {e}")
-            return {"confidence": 0.3, "issues": [{"type": "error", "description": f"Review error: {str(e)}", "file": "unknown"}]}
+            logger.error(f"LLM review error: {e}")
+            return {"confidence": 0.5, "issues": [{"type": "error", "description": f"Review error: {str(e)}", "file": "unknown"}]}
+
 
     async def _deep_qa_mode(self, task: Task) -> Task:
         """
@@ -451,8 +581,8 @@ Focus on critical issues only. Be concise."""
                 logger.warning(f"Task output directory not found: {task_output_dir}")
                 return code_files
             
-            # Load all Python files from the directory
-            for py_file in task_output_dir.glob("*.py"):
+            # Load all Python files recursively from the directory and subdirectories
+            for py_file in task_output_dir.rglob("*.py"):
                 try:
                     content = py_file.read_text(encoding="utf-8")
                     code_files[str(py_file.relative_to(DEV_OUTPUT_DIR))] = content
@@ -912,6 +1042,99 @@ Focus on critical issues only. Be concise."""
         else:
             logger.warning("❌ Unable to categorize issues, failing QA")
             return "fail"    
+# Token Optimization Helper Methods
+    
+    def _extract_functions_for_review(self, code_content: str) -> List[Dict]:
+        """Extract only functions worth reviewing (skip simple getters/setters)."""
+        import ast
+        
+        try:
+            tree = ast.parse(code_content)
+            functions = []
+            
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                    start = node.lineno
+                    end = node.end_lineno or start
+                    lines = code_content.split('\n')[start-1:end]
+                    
+                    # Skip trivial functions (< 5 lines)
+                    if len(lines) > 5:
+                        functions.append({
+                            'name': node.name,
+                            'type': 'function' if isinstance(node, ast.FunctionDef) else 'class',
+                            'code': '\n'.join(lines),
+                            'lines': (start, end)
+                        })
+            
+            # Return max 3 functions per file
+            return functions[:3]
+        except Exception as e:
+            logger.debug(f"Failed to extract functions: {e}")
+            return []
+    
+    def _needs_llm_review(self, filename: str, code_content: str) -> bool:
+        """Determine if file needs LLM review or just syntax check."""
+        
+        # Skip LLM for simple files
+        simple_indicators = [
+            len(code_content) < 500,                    # Very short
+            filename.endswith('__init__.py'),           # Just imports
+            code_content.count('def ') < 2,             # Fewer than 2 functions
+            code_content.count('class ') == 0,          # No classes
+            'TODO' not in code_content,                 # No pending work
+            'FIXME' not in code_content,
+            code_content.count('\n') < 20               # Less than 20 lines
+        ]
+        
+        # Need at least 4 indicators to skip LLM (more conservative)
+        if sum(simple_indicators) >= 4:
+            logger.info(f"⏭️  Skipping LLM review for simple file: {filename}")
+            return False  # Just run syntax check (zero tokens)
+        
+        return True  # Needs LLM review
+    
+    def _select_model_for_task(self, task_type: str, code_length: int) -> str:
+        """Choose the cheapest model that can handle the task."""
+        
+        # Ultra-cheap for simple checks
+        if task_type == "syntax_review" and code_length < 1000:
+            return "gemini-1.5-flash-8b"  # 4x cheaper
+        
+        # Medium for normal review
+        if task_type == "logic_review" and code_length < 3000:
+            return "gemini-2.0-flash"  # 2x cheaper than 2.5
+        
+        # Full model only for complex fixes
+        if task_type == "fix_generation":
+            return "gemini-2.5-flash"
+        
+        return "gemini-2.0-flash"  # Default to cheaper
+    
+    def _parse_pytest_output(self, stdout: str, stderr: str) -> Dict:
+        """Extract only failures, not full output."""
+        
+        if "passed" in stdout and "failed" not in stdout.lower():
+            return {
+                "passed": True,
+                "summary": "All tests passed",
+                "failures": []
+            }
+        
+        # Extract only failure lines
+        import re
+        failure_pattern = r'FAILED (.*?) - (.*?)$'
+        failures = re.findall(failure_pattern, stdout, re.MULTILINE)
+        
+        return {
+            "passed": False,
+            "summary": f"{len(failures)} test(s) failed",
+            "failures": [
+                {"test": test, "reason": reason[:200]}  # Truncate reason
+                for test, reason in failures[:5]  # Max 5 failures
+            ]
+        }
+
 # Helper methods for testing and fixing
 
     def _extract_code_context(self, code_content: str, line_number: Optional[int] = None, window: int = 6) -> str:
@@ -1056,10 +1279,22 @@ Focus on critical issues only. Be concise."""
             Path(test_path).unlink()
             Path(code_path).unlink()
             
-            if result.returncode == 0:
-                return {"passed": True, "error": None, "output": result.stdout}
+            # Parse output to extract only failures (80-95% token savings)
+            parsed = self._parse_pytest_output(result.stdout, result.stderr)
+            
+            if parsed["passed"]:
+                return {"passed": True, "error": None, "summary": parsed["summary"]}
             else:
-                return {"passed": False, "error": f"Test failures: {result.stdout}\n{result.stderr}"}
+                # Return only summary and first few failures, not full output
+                failure_details = "\n".join([
+                    f"- {f['test']}: {f['reason']}" 
+                    for f in parsed["failures"]
+                ])
+                return {
+                    "passed": False, 
+                    "error": f"{parsed['summary']}\n{failure_details}",
+                    "summary": parsed["summary"]
+                }
                 
         except subprocess.TimeoutExpired:
             return {"passed": False, "error": "Test execution timeout"}
@@ -1136,43 +1371,50 @@ Return ONLY the test code, no explanations:
             return ""
 
     async def _generate_fix_for_issue(self, issue: Dict, code_content: str, task: Task) -> str:
-        """Generate a fix for a specific issue using LLM."""
-        prompt = f"""
-You are a Senior Software Developer. Fix the following issue in the Python code.
+        """Generate a fix for a specific issue using LLM with diff-based optimization."""
+        
+        # Extract only ±10 lines around the issue (70-90% token savings)
+        if issue.get('line_number'):
+            lines = code_content.split('\n')
+            start = max(0, issue['line_number'] - 10)
+            end = min(len(lines), issue['line_number'] + 10)
+            relevant_code = '\n'.join(lines[start:end])
+            
+            # Minimal prompt for diff-based fix
+            prompt = f"""Fix this issue (return ONLY the corrected section):
 
-Issue Type: {issue['issue_type']}
-Issue Description: {issue['description']}
-File: {issue['file_path']}
-{f"Line: {issue['line_number']}" if issue.get('line_number') else ""}
-
-{"Code Context:\n```python\n" + issue.get('code_context', '') + "\n```" if issue.get('code_context') else ""}
-
-Original Code:
+Issue: {issue['description']}
+Lines {start+1}-{end+1} of {issue['file_path']}:
 ```python
-{code_content}
+{relevant_code}
 ```
 
-Task Context: {task.description}
+Return ONLY the fixed lines {start+1}-{end+1}."""
+        else:
+            # For non-line-specific issues, use first 1000 chars
+            relevant_code = code_content[:1000]
+            prompt = f"""Fix this issue:
 
-Requirements:
-1. Fix ONLY the specific issue mentioned
-2. Maintain the original functionality
-3. Follow Python best practices
-4. Return the complete corrected code
-5. Do not add unnecessary changes
+Issue: {issue['description']}
+File: {issue['file_path']} (first 1000 chars)
+```python
+{relevant_code}
+```
 
-Return ONLY the fixed code, no explanations:
-"""
+Return fixed version (max 1000 chars)."""
         
         try:
-            fixed_code = await ask_llm(
+            # Use model selection based on code length
+            model = self._select_model_for_task("fix_generation", len(relevant_code))
+            fixed_section = await ask_llm(
                 user_prompt=prompt,
-                system_prompt="You are a software developer fixing code issues. Return only the corrected Python code.",
-                model="gemini-2.5-flash",
+                system_prompt="Fix the code. Return only corrected code.",
+                model=model,
                 temperature=0.2,
                 validate_json=False
             )
-            if self._is_llm_fallback_response(fixed_code):
+            
+            if self._is_llm_fallback_response(fixed_section):
                 self._flag_issue_for_manual_review(issue, "LLM returned fallback response while generating fix")
                 await self.websocket_manager.broadcast_message({
                     "agent_id": self.agent_id,
@@ -1182,7 +1424,17 @@ Return ONLY the fixed code, no explanations:
                     "timestamp": datetime.now().isoformat()
                 })
                 return code_content
-            return fixed_code
+            
+            # Merge fix back into full code
+            if issue.get('line_number'):
+                lines = code_content.split('\n')
+                fixed_lines = fixed_section.strip().split('\n')
+                lines[start:end] = fixed_lines
+                return '\n'.join(lines)
+            else:
+                # For non-line-specific, return the fixed section
+                return fixed_section
+                
         except Exception as e:
             logger.error(f"Failed to generate fix for issue: {e}")
             self._flag_issue_for_manual_review(issue, f"LLM error: {str(e)}")

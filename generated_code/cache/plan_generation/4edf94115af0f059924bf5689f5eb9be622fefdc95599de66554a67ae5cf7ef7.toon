@@ -1,0 +1,6 @@
+PLAN<calc001>|Simple Calculator App|Develop a basic calculator application with core arithmetic operations
+TASK<001>|Initialize Project Structure|Set up basic project files and dependencies|1|[]|2.0|simple|dev_agent
+TASK<002>|Implement Basic Operations|Code functions for addition, subtraction, multiplication, division|2|[001]|4.0|medium|dev_agent
+TASK<003>|Build CLI Interface|Create a command-line interface for user input and output|3|[002]|5.0|medium|dev_agent
+TASK<004>|Add Input Validation & Error Handling|Handle division by zero and non-numeric inputs|4|[003]|3.0|medium|dev_agent
+TASK<005>|Write Unit Tests for Logic|Develop tests for all arithmetic functions and error cases|5|[004]|6.0|medium|qa_agent

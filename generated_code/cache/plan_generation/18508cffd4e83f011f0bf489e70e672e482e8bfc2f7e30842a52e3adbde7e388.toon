@@ -1,0 +1,6 @@
+PLAN<calc001>|Simple Calculator|Develop a basic calculator application
+TASK<001>|Project Setup|Initialize project structure and dependencies|1|[]|2.5|simple|dev_agent
+TASK<002>|Implement Core Logic|Develop functions for addition, subtraction, multiplication, division|2|[001]|4.0|medium|dev_agent
+TASK<003>|Build User Interface|Create a command-line interface for input and output|3|[001]|3.0|medium|dev_agent
+TASK<004>|Write Unit Tests|Develop comprehensive unit tests for all core logic functions|4|[002,003]|3.5|medium|qa_agent
+TASK<005>|Implement Error Handling|Add robust error handling for invalid input and division by zero|5|[002,003]|2.5|medium|dev_agent

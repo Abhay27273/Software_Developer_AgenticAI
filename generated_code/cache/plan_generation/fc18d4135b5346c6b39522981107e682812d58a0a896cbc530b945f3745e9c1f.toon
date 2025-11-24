@@ -1,0 +1,7 @@
+PLAN<akino001>|Akino Web Application MVP|Develop a minimal viable product for the Akino web application.
+TASK<001>|Project Setup & DB Init|Initialize repository, configure framework, setup database schema.|1|[]|4.0|medium|dev_agent
+TASK<002>|User Auth Module|Develop user registration, login, and session management endpoints.|2|[001]|6.0|medium|dev_agent
+TASK<003>|Akino Core Logic|Implement the primary business logic and data model for Akino.|3|[001]|7.0|complex|dev_agent
+TASK<004>|API Integration Tests|Write and execute integration tests for authentication and core features.|4|[002,003]|5.0|medium|qa_agent
+TASK<005>|Basic Frontend UI|Develop a basic user interface for Akino's core features.|5|[002,003]|8.0|medium|dev_agent
+TASK<006>|Staging Environment Setup|Configure CI/CD pipeline and deploy Akino to a staging server.|6|[005]|6.0|medium|ops_agent

@@ -1,0 +1,98 @@
+{
+  "id": "13bc40b9-151b-4c52-bfea-e46f387ec42a",
+  "title": "Snake Game MVP",
+  "description": "Develop a basic playable classic Snake game",
+  "tasks": [
+    {
+      "id": "001",
+      "title": "Setup Game Environment",
+      "description": "Initialize game window, basic event loop, and display setup",
+      "priority": 1,
+      "status": "pending",
+      "dependencies": [],
+      "estimated_hours": 3.0,
+      "complexity": "simple",
+      "agent_type": "dev_agent",
+      "created_at": "2025-11-25T00:28:50.517662",
+      "metadata": {}
+    },
+    {
+      "id": "002",
+      "title": "Implement Snake Core Logic",
+      "description": "Develop snake movement, growth mechanism, and self/wall collision detection",
+      "priority": 2,
+      "status": "pending",
+      "dependencies": [
+        "001"
+      ],
+      "estimated_hours": 6.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-11-25T00:28:50.517878",
+      "metadata": {}
+    },
+    {
+      "id": "003",
+      "title": "Food Generation & Logic",
+      "description": "Create random food placement and logic for snake consuming food",
+      "priority": 3,
+      "status": "pending",
+      "dependencies": [
+        "002"
+      ],
+      "estimated_hours": 4.5,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-11-25T00:28:50.518041",
+      "metadata": {}
+    },
+    {
+      "id": "004",
+      "title": "Game State Management",
+      "description": "Add scoring system, game over conditions, and restart functionality",
+      "priority": 4,
+      "status": "pending",
+      "dependencies": [
+        "003"
+      ],
+      "estimated_hours": 5.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-11-25T00:28:50.518199",
+      "metadata": {}
+    },
+    {
+      "id": "005",
+      "title": "User Interface & Graphics",
+      "description": "Render snake, food, score, and game over screen elements",
+      "priority": 5,
+      "status": "pending",
+      "dependencies": [
+        "004"
+      ],
+      "estimated_hours": 7.0,
+      "complexity": "medium",
+      "agent_type": "dev_agent",
+      "created_at": "2025-11-25T00:28:50.518359",
+      "metadata": {}
+    },
+    {
+      "id": "006",
+      "title": "Full Game Quality Assurance",
+      "description": "Conduct comprehensive testing of all game mechanics, scoring, and edge cases",
+      "priority": 6,
+      "status": "pending",
+      "dependencies": [
+        "005"
+      ],
+      "estimated_hours": 8.0,
+      "complexity": "complex",
+      "agent_type": "qa_agent",
+      "created_at": "2025-11-25T00:28:50.518538",
+      "metadata": {}
+    }
+  ],
+  "created_at": "2025-11-25T00:28:50.509806",
+  "total_estimated_hours": null,
+  "complexity_distribution": {}
+}

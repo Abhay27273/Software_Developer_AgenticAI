@@ -116,98 +116,6 @@
             font-size: 24px;
             color: var(--accent-color);
         }
-        
-        /* Akino Branding */
-        .akino-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-        .akino-avatar-main {
-            position: relative;
-            flex-shrink: 0;
-        }
-        /* Live Avatar Container */
-        .akino-live-avatar {
-            width: 48px;
-            height: 48px;
-            background: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
-            border: 3px solid rgba(255, 255, 255, 0.9);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        .akino-live-avatar:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        .akino-live-avatar.thinking {
-            animation: avatar-pulse 2s ease-in-out infinite;
-        }
-        @keyframes avatar-pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.03); }
-        }
-        /* Eyes Container */
-        .akino-eyes {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-            justify-content: center;
-            padding-top: 1px;
-        }
-        /* Individual Eye */
-        .akino-eye {
-            width: 6px;
-            height: 10px;
-            background-color: #1e293b;
-            border-radius: 50%;
-            transition: transform 0.075s ease-out;
-            will-change: transform;
-        }
-        .akino-eye.blinking {
-            transform: scaleY(0);
-        }
-        .akino-pulse-ring {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 3px solid rgba(255, 255, 255, 0.6);
-            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-            pointer-events: none;
-        }
-        @keyframes pulse-ring {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.15); opacity: 0.5; }
-        }
-        .akino-brand-text {
-            color: white;
-        }
-        .akino-name {
-            font-size: 22px;
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: 0.5px;
-        }
-        .akino-tagline {
-            font-size: 11px;
-            margin: 2px 0 0 0;
-            opacity: 0.9;
-            font-weight: 500;
-        }
-        
         .sidebar-section {
             padding-bottom: 20px;
             border-bottom: 1px solid var(--border-color);
@@ -550,59 +458,13 @@
             flex-direction: column;
             gap: 12px;
         }
-        #pm-agent-output .pm-progress-container {
+        #pm-agent-output .pm-progress-bar {
             background: #ffffff;
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-        #pm-agent-output .pm-progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            border-radius: var(--border-radius-md);
+            padding: 14px;
             margin-bottom: 12px;
-        }
-        #pm-agent-output .pm-progress-label {
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        #pm-agent-output .pm-progress-text {
-            font-size: 13px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-        #pm-agent-output .pm-progress-bar-bg {
-            width: 100%;
-            height: 10px;
-            background: #f0f0f0;
-            border-radius: 999px;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-        #pm-agent-output .pm-progress-bar-fill {
-            height: 100%;
-            border-radius: 999px;
-            transition: width 0.5s ease, background 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        #pm-agent-output .pm-progress-stats {
-            display: flex;
-            gap: 16px;
-            font-size: 12px;
-            flex-wrap: wrap;
-        }
-        #pm-agent-output .pm-stat {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--text-secondary);
-            font-weight: 500;
+            box-shadow: var(--shadow-light);
         }
         #pm-agent-output .pm-task-item {
             background: #ffffff;
@@ -860,32 +722,9 @@
             font-weight: 600;
             font-size: 16px; /* Reduced from 18px */
             flex-shrink: 0;
-            position: relative;
-            overflow: hidden;
         }
         .chat-avatar.user { background-color: #6c757d; } /* Muted grey for user avatar */
-        .chat-avatar.ai { 
-            background-color: white; 
-            border: 2px solid #667eea;
-            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.2);
-        }
-        /* Live avatar eyes in chat */
-        .chat-avatar.ai .chat-akino-eyes {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-            justify-content: center;
-        }
-        .chat-avatar.ai .chat-akino-eye {
-            width: 4px;
-            height: 7px;
-            background-color: #1e293b;
-            border-radius: 50%;
-            transition: transform 0.075s ease-out;
-        }
-        .chat-avatar.ai .chat-akino-eye.blinking {
-            transform: scaleY(0);
-        }
+        .chat-avatar.ai { background-color: var(--accent-color); } /* Accent for AI avatar */
         
         /* Chat messages in split view - make them more compact */
         .content-area.split-active .chat-message {
@@ -1025,27 +864,6 @@
             display: flex;
             align-items: center;
             gap: 8px;
-        }
-        #stop-agents-btn {
-            padding: 0;
-            width: 40px;
-            height: 40px;
-            border: 1px solid var(--border-color);
-            background-color: var(--button-bg-secondary);
-            color: var(--text-secondary);
-            border-radius: 6px;
-            font-size: 18px;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        #stop-agents-btn:hover {
-            background-color: var(--button-hover-secondary);
-            color: var(--text-primary);
-            border-color: var(--text-secondary);
         }
         #send-message-btn:hover:not(:disabled) {
             background-color: var(--accent-hover);
@@ -1853,21 +1671,8 @@
             <!-- Resize Handle -->
             <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
             
-            <!-- Akino Branding with Live Avatar -->
-            <div class="akino-brand">
-                <div class="akino-avatar-main">
-                    <div class="akino-live-avatar" id="akino-avatar">
-                        <div class="akino-eyes">
-                            <div class="akino-eye" id="eye-left"></div>
-                            <div class="akino-eye" id="eye-right"></div>
-                        </div>
-                        <div class="akino-pulse-ring"></div>
-                    </div>
-                </div>
-                <div class="akino-brand-text">
-                    <h1 class="akino-name">Akino</h1>
-                    <p class="akino-tagline">AI Development Assistant</p>
-                </div>
+            <div class="sidebar-header">
+                <span class="logo-icon"><i class="fas fa-robot"></i></span> AI Agent
             </div>
 
             <!-- Connection Status moved here for better integration -->
@@ -1948,7 +1753,7 @@
                     </div>
                     <div id="ops-agent-output" class="agent-output-content hidden">
                         <div class="ops-section">
-                            <h3><i class="fas fa-rocket" style="color: #0891b2; margin-right: 8px;"></i>Deployment Status</h3>
+                            <h3>🚀 Deployment Status</h3>
                             <div id="ops-deployment-status" class="ops-deployment-status">
                                 <div class="empty-state">No deployment yet. Ops Agent will show deployment details here.</div>
                             </div>
@@ -2056,9 +1861,6 @@
                 <div class="input-wrapper">
                     <div class="input-top-row">
                         <textarea id="requirements-input" placeholder="Describe your project requirements or ask a question..." rows="1"></textarea>
-                        <button id="stop-agents-btn" class="hidden" title="Stop Agent Execution">
-                            <i class="fas fa-stop"></i>
-                        </button>
                         <button id="send-message-btn" title="Send Message">
                             <i class="fas fa-paper-plane"></i> Send
                         </button>
@@ -2111,189 +1913,6 @@
 
     <!-- Your PlanningDashboard.js script -->
     <script>
-        // ========================================
-        // AKINO ICON CONFIGURATION
-        // ========================================
-        const AKINO_ICONS = {
-            // Agent Personas
-            pm: { icon: 'fa-bullseye', color: '#9333ea', bg: '#faf5ff', label: 'Akino PM' },
-            dev: { icon: 'fa-terminal', color: '#2563eb', bg: '#eff6ff', label: 'Akino Dev' },
-            qa: { icon: 'fa-bug', color: '#ea580c', bg: '#fff7ed', label: 'Akino QA' },
-            ops: { icon: 'fa-server', color: '#475569', bg: '#f8fafc', label: 'Akino Ops' },
-            
-            // Status States
-            idle: { icon: 'fa-circle-notch', color: '#94a3b8', label: 'Idle' },
-            active: { icon: 'fa-chart-line', color: '#3b82f6', label: 'Active', animate: 'fa-pulse' },
-            complete: { icon: 'fa-check-circle', color: '#059669', label: 'Complete' },
-            error: { icon: 'fa-times-circle', color: '#dc2626', label: 'Error' },
-            warning: { icon: 'fa-exclamation-triangle', color: '#d97706', label: 'Warning' },
-            
-            // Actions
-            creating: { icon: 'fa-sparkles', color: '#4f46e5', label: 'Creating' },
-            building: { icon: 'fa-hammer', color: '#57534e', label: 'Building' },
-            testing: { icon: 'fa-flask', color: '#db2777', label: 'Testing' },
-            deploying: { icon: 'fa-rocket', color: '#0891b2', label: 'Deploying' },
-            analyzing: { icon: 'fa-brain', color: '#7c3aed', label: 'Analyzing' },
-            
-            // Files
-            file: { icon: 'fa-file', color: '#64748b', label: 'File' },
-            folder: { icon: 'fa-folder', color: '#60a5fa', label: 'Folder' },
-            code: { icon: 'fa-file-code', color: '#0284c7', label: 'Source' },
-            config: { icon: 'fa-cog', color: '#475569', label: 'Config' },
-            docs: { icon: 'fa-book-open', color: '#0d9488', label: 'Docs' },
-            
-            // Progress
-            progress: { icon: 'fa-spinner', color: '#2563eb', label: 'Processing', animate: 'fa-spin' },
-            pending: { icon: 'fa-hourglass-half', color: '#d97706', label: 'Pending', animate: 'fa-pulse' },
-            success: { icon: 'fa-check-circle', color: '#059669', label: 'Success' },
-            failed: { icon: 'fa-times-circle', color: '#dc2626', label: 'Failed' }
-        };
-
-        // Icon Helper Functions
-        function getIconHTML(type, size = 16, extraClasses = '') {
-            const config = AKINO_ICONS[type] || AKINO_ICONS.idle;
-            const animate = config.animate || '';
-            return `<i class="fas ${config.icon} ${animate} ${extraClasses}" style="color: ${config.color}; font-size: ${size}px;"></i>`;
-        }
-
-        function getAgentIcon(agentType, status = null) {
-            const html = getIconHTML(agentType, 18);
-            if (status) {
-                return `${html} ${getIconHTML(status, 14)}`;
-            }
-            return html;
-        }
-
-        function getAgentLabel(agentType) {
-            return AKINO_ICONS[agentType]?.label || agentType;
-        }
-
-        // ========================================
-        // AKINO LIVE AVATAR - Eye Tracking
-        // ========================================
-        class AkinoLiveAvatar {
-            constructor() {
-                this.avatar = document.getElementById('akino-avatar');
-                this.eyeLeft = document.getElementById('eye-left');
-                this.eyeRight = document.getElementById('eye-right');
-                this.isThinking = false;
-                this.isBlinking = false;
-                this.eyePosition = { x: 0, y: 0 };
-                this.thinkingAnimationFrame = null;
-                this.chatAvatars = []; // Track all chat message avatars
-                
-                this.init();
-            }
-            
-            init() {
-                // Mouse tracking
-                window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-                
-                // Random blinking
-                this.startBlinking();
-            }
-            
-            registerChatAvatar(avatarElement, eyeLeft, eyeRight) {
-                // Add chat avatar to tracking list
-                this.chatAvatars.push({ avatarElement, eyeLeft, eyeRight });
-            }
-            
-            handleMouseMove(e) {
-                if (this.isThinking) return;
-                
-                // Calculate distance from center of screen
-                const x = (e.clientX - window.innerWidth / 2) / 45;
-                const y = (e.clientY - window.innerHeight / 2) / 45;
-                
-                // Limit movement range
-                const limit = 6;
-                const constrainedX = Math.max(Math.min(x, limit), -limit);
-                const constrainedY = Math.max(Math.min(y, limit), -limit);
-                
-                this.eyePosition = { x: constrainedX, y: constrainedY };
-                this.updateEyePosition();
-            }
-            
-            updateEyePosition() {
-                const thinkOffsetY = this.isThinking ? Math.sin(Date.now() / 150) * 1.5 : 0;
-                const transform = `translate(${this.eyePosition.x}px, ${this.eyePosition.y + thinkOffsetY}px)`;
-                
-                // Update main sidebar avatar
-                if (this.eyeLeft) this.eyeLeft.style.transform = transform;
-                if (this.eyeRight) this.eyeRight.style.transform = transform;
-                
-                // Update all chat message avatars
-                this.chatAvatars.forEach(({ eyeLeft, eyeRight }) => {
-                    if (eyeLeft) eyeLeft.style.transform = transform;
-                    if (eyeRight) eyeRight.style.transform = transform;
-                });
-            }
-            
-            startBlinking() {
-                const blink = () => {
-                    this.isBlinking = true;
-                    
-                    // Blink main sidebar avatar
-                    if (this.eyeLeft) this.eyeLeft.classList.add('blinking');
-                    if (this.eyeRight) this.eyeRight.classList.add('blinking');
-                    
-                    // Blink all chat avatars
-                    this.chatAvatars.forEach(({ eyeLeft, eyeRight }) => {
-                        if (eyeLeft) eyeLeft.classList.add('blinking');
-                        if (eyeRight) eyeRight.classList.add('blinking');
-                    });
-                    
-                    setTimeout(() => {
-                        this.isBlinking = false;
-                        
-                        // Un-blink main sidebar avatar
-                        if (this.eyeLeft) this.eyeLeft.classList.remove('blinking');
-                        if (this.eyeRight) this.eyeRight.classList.remove('blinking');
-                        
-                        // Un-blink all chat avatars
-                        this.chatAvatars.forEach(({ eyeLeft, eyeRight }) => {
-                            if (eyeLeft) eyeLeft.classList.remove('blinking');
-                            if (eyeRight) eyeRight.classList.remove('blinking');
-                        });
-                    }, 150);
-                    
-                    // Random blink interval (2-5 seconds)
-                    const nextBlink = Math.random() * 3000 + 2000;
-                    setTimeout(blink, nextBlink);
-                };
-                
-                blink();
-            }
-            
-            setThinking(thinking) {
-                this.isThinking = thinking;
-                
-                if (thinking) {
-                    this.avatar.classList.add('thinking');
-                    this.startThinkingAnimation();
-                } else {
-                    this.avatar.classList.remove('thinking');
-                    this.stopThinkingAnimation();
-                }
-            }
-            
-            startThinkingAnimation() {
-                const animate = () => {
-                    if (!this.isThinking) return;
-                    this.updateEyePosition();
-                    this.thinkingAnimationFrame = requestAnimationFrame(animate);
-                };
-                animate();
-            }
-            
-            stopThinkingAnimation() {
-                if (this.thinkingAnimationFrame) {
-                    cancelAnimationFrame(this.thinkingAnimationFrame);
-                    this.thinkingAnimationFrame = null;
-                }
-            }
-        }
-
         // PlanningDashboard.js
         class PlanningDashboard {
             constructor() {
@@ -2336,8 +1955,6 @@
                 // Basic UI controls
                 this.requirementsInput = document.getElementById('requirements-input');
                 this.sendMessageBtn = document.getElementById('send-message-btn');
-                this.stopAgentsBtn = document.getElementById('stop-agents-btn');
-                this.agentsRunning = false;
                 // Main panels
                 this.mainContent = document.querySelector('.main-content');
                 this.contentArea = document.querySelector('.content-area'); // New content area
@@ -2561,29 +2178,7 @@
                 
                 const avatarElement = document.createElement('div');
                 avatarElement.classList.add('chat-avatar', sender);
-                
-                if (sender === 'user') {
-                    avatarElement.textContent = 'You';
-                } else {
-                    // Create live avatar for AI messages
-                    const eyesContainer = document.createElement('div');
-                    eyesContainer.classList.add('chat-akino-eyes');
-                    
-                    const eyeLeft = document.createElement('div');
-                    eyeLeft.classList.add('chat-akino-eye');
-                    
-                    const eyeRight = document.createElement('div');
-                    eyeRight.classList.add('chat-akino-eye');
-                    
-                    eyesContainer.appendChild(eyeLeft);
-                    eyesContainer.appendChild(eyeRight);
-                    avatarElement.appendChild(eyesContainer);
-                    
-                    // Register this avatar with the live avatar controller
-                    if (window.akinoAvatar) {
-                        window.akinoAvatar.registerChatAvatar(avatarElement, eyeLeft, eyeRight);
-                    }
-                }
+                avatarElement.textContent = sender === 'user' ? 'You' : 'Akino';
                 const contentElement = document.createElement('div');
                 contentElement.classList.add('chat-content');
                 // Use marked.parse for markdown rendering
@@ -2665,45 +2260,33 @@
                     return;
                 }
                 
-                // Add progress summary - always calculate from actual task statuses for accuracy
+                // Add progress summary - use dynamic progress if available, otherwise calculate from tasks
                 const tasks = Array.from(this.pmTasks.values());
+                let completedCount, totalCount, progressPercent, currentTaskLabel;
                 
-                // Calculate task stats from actual task statuses
-                const pendingCount = tasks.filter(t => t.status === 'pending' || !t.status).length;
-                const inProgressCount = tasks.filter(t => t.status === 'in-progress').length;
-                const completedCount = tasks.filter(t => t.status === 'completed').length;
-                const failedCount = tasks.filter(t => t.status === 'failed').length;
-                
-                // Calculate progress
-                const totalCount = tasks.length;
-                const progressPercent = totalCount > 0 ? Math.round((completedCount/totalCount) * 100) : 0;
-                
-                // Current task label
-                const currentTaskLabel = this.pmProgress && this.pmProgress.currentTask ? 
-                    `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Current: ${this.pmProgress.currentTask}</div>` : '';
-                
-                // Determine progress color
-                let progressColor = 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)'; // 0-30%
-                if (progressPercent >= 70) progressColor = 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)'; // 70-100%
-                else if (progressPercent >= 30) progressColor = 'linear-gradient(90deg, #ffd89b 0%, #19547b 100%)'; // 30-70%
+                if (this.pmProgress && this.pmProgress.total > 0) {
+                    // Use real-time progress from PM Agent
+                    completedCount = this.pmProgress.completed;
+                    totalCount = this.pmProgress.total;
+                    progressPercent = this.pmProgress.percent;
+                    currentTaskLabel = this.pmProgress.currentTask ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Current: ${this.pmProgress.currentTask}</div>` : '';
+                } else {
+                    // Fallback to task completion count
+                    completedCount = tasks.filter(t => t.status === 'completed').length;
+                    totalCount = tasks.length;
+                    progressPercent = totalCount > 0 ? Math.round((completedCount/totalCount) * 100) : 0;
+                    currentTaskLabel = '';
+                }
                 
                 const progressBar = document.createElement('div');
-                progressBar.className = 'pm-progress-container';
+                progressBar.className = 'pm-progress-bar';
                 progressBar.innerHTML = `
-                    <div class="pm-progress-header">
-                        <span class="pm-progress-label">
-                            ${getIconHTML('progress', 16)} Project Progress
-                        </span>
-                        <span class="pm-progress-text">${completedCount}/${totalCount} tasks (${progressPercent}%)</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 14px;">Progress: ${completedCount}/${totalCount} tasks</span>
+                        <span style="font-size: 13px; color: var(--text-secondary);">${progressPercent}%</span>
                     </div>
-                    <div class="pm-progress-bar-bg">
-                        <div class="pm-progress-bar-fill" style="width: ${progressPercent}%; background: ${progressColor}"></div>
-                    </div>
-                    <div class="pm-progress-stats">
-                        <span class="pm-stat">${getIconHTML('pending', 14)} Pending: ${pendingCount}</span>
-                        <span class="pm-stat">${getIconHTML('active', 14)} In Progress: ${inProgressCount}</span>
-                        <span class="pm-stat">${getIconHTML('complete', 14)} Complete: ${completedCount}</span>
-                        ${failedCount > 0 ? `<span class="pm-stat">${getIconHTML('failed', 14)} Failed: ${failedCount}</span>` : ''}
+                    <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                        <div style="width: ${progressPercent}%; height: 100%; background: linear-gradient(90deg, #0f7b45, #1ea660); transition: width 0.3s;"></div>
                     </div>
                     ${currentTaskLabel}
                 `;
@@ -2718,13 +2301,13 @@
                     const title = document.createElement('div');
                     title.className = 'pm-task-title';
                     
-                    // Status icon mapping using our icon system
-                    let statusIconType = 'pending';
-                    if (task.status === 'in-progress') statusIconType = 'active';
-                    else if (task.status === 'completed') statusIconType = 'complete';
-                    else if (task.status === 'failed') statusIconType = 'failed';
+                    // Status icon mapping
+                    let statusIcon = '⏳';
+                    if (task.status === 'in-progress') statusIcon = '🔄';
+                    else if (task.status === 'completed') statusIcon = '✅';
+                    else if (task.status === 'failed') statusIcon = '❌';
                     
-                    title.innerHTML = `<span style="margin-right: 8px;">${getIconHTML(statusIconType, 16)}</span>${task.title || 'Untitled Task'}`;
+                    title.innerHTML = `<span style="margin-right: 8px;">${statusIcon}</span>${task.title || 'Untitled Task'}`;
                     const status = document.createElement('span');
                     status.className = `pm-task-status ${task.status || 'pending'}`;
                     status.textContent = (task.status || 'pending').replace('-', ' ');
@@ -2734,13 +2317,10 @@
                     meta.className = 'pm-task-meta';
                     const metaParts = [];
                     metaParts.push(`#${index + 1}`);
-                    if (task.agent) {
-                        const agentType = task.agent.replace('_agent', '');
-                        metaParts.push(`${getIconHTML(agentType, 14)} ${agentType.toUpperCase()}`);
-                    }
-                    if (task.priority !== undefined) metaParts.push(`${getIconHTML('warning', 12)} Priority: ${task.priority}`);
-                    if (task.outputDir) metaParts.push(`${getIconHTML('folder', 14)} ${task.outputDir}`);
-                    if (task.lastGeneratedFile) metaParts.push(`${getIconHTML('file', 14)} ${task.lastGeneratedFile}`);
+                    if (task.agent) metaParts.push(`👤 ${task.agent.replace('_agent', '').toUpperCase()}`);
+                    if (task.priority !== undefined) metaParts.push(`⭐ ${task.priority}`);
+                    if (task.outputDir) metaParts.push(`📁 ${task.outputDir}`);
+                    if (task.lastGeneratedFile) metaParts.push(`📄 ${task.lastGeneratedFile}`);
                     meta.innerHTML = metaParts.map(part => `<span>${part}</span>`).join('');
                     item.appendChild(header);
                     item.appendChild(meta);
@@ -3010,7 +2590,6 @@
             }
             bindEvents() {
                 this.sendMessageBtn.addEventListener('click', () => this.sendMessage());
-                this.stopAgentsBtn.addEventListener('click', () => this.stopAgents());
                 this.requirementsInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault(); // Prevent newline
@@ -3540,47 +3119,6 @@
                     this.connectionStatus.className = 'connection-status disconnected';
                 }
             }
-            shouldExcludeFile(path) {
-                // File patterns to exclude (system/cache/temp files)
-                const excludePatterns = [
-                    '__pycache__', '.pytest_cache', 'node_modules', '.git',
-                    '.venv', 'venv', '.env', '.DS_Store', '.pyc', '.log',
-                    '.cache', 'dist', 'build', '.next', 'coverage',
-                    '.idea', '.vscode', 'package-lock.json', 'yarn.lock',
-                    '.gitignore', '.dockerignore'
-                ];
-                
-                const lowerPath = path.toLowerCase();
-                const fileName = path.split('/').pop().toLowerCase();
-                
-                // Exclude any path starting with "cache/" or "cache\"
-                if (/^cache[\/\\]/i.test(path)) {
-                    return true;
-                }
-                
-                // Exclude system/cache patterns
-                if (excludePatterns.some(pattern => lowerPath.includes(pattern.toLowerCase()))) {
-                    return true;
-                }
-                
-                // Exclude code_*.txt files (temporary code snippets)
-                if (/^code_\d+\.txt$/i.test(fileName)) {
-                    return true;
-                }
-                
-                // Exclude generic numbered files like "How", "Run", "Setup", etc. without extensions
-                if (/^(how|run|setup|install|start|python|api|production|snake|core|pygame)$/i.test(fileName)) {
-                    return true;
-                }
-                
-                // Exclude task_metadata.json (internal tracking)
-                if (fileName === 'task_metadata.json') {
-                    return true;
-                }
-                
-                return false;
-            }
-            
             renderFileTree() {
                 if (!this.fileTree) return;
                 const buildHierarchy = (files) => {
@@ -3588,10 +3126,6 @@
                     const sortedPaths = Object.keys(files).sort();
                     for (const path of sortedPaths) {
                         if (path === 'welcome') continue;
-                        
-                        // Apply filtering
-                        if (this.shouldExcludeFile(path)) continue;
-                        
                         // Only show code/config files, not .txt/.md unless config
                         if (/\.(txt|md)$/i.test(path) && !/config|env|settings|test/i.test(path)) continue;
                         let current = root;
@@ -4127,7 +3661,7 @@
                             break;
                         
                         case 'planning_started':
-                            this.addChatMessage(`${getAgentIcon('pm', 'analyzing')} **${getAgentLabel('pm')}**: Starting analysis of your requirements. Let me break this down into actionable tasks...`, 'ai');
+                            this.addChatMessage('🤖 **PM Agent**: Starting analysis of your requirements. Let me break this down into actionable tasks...', 'ai');
                             this.showActiveAgentPanel('chat'); // Ensure chat is active
                             this.setTypingIndicator(true); // Show typing indicator
                             this.setAgentStatus('chat', 'running'); // Set chat agent status to running
@@ -4191,10 +3725,10 @@
                             if (!this.devAgentOutput.dataset.rawContent) this.devAgentOutput.dataset.rawContent = '';
                             this.devAgentOutput.dataset.rawContent += data.content;
 
-                            // Update dev agent status but don't force panel switch
+                            // Keep streaming output in Dev tab only (no chat noise)
+                            this.showDevAgentCodeOnly();
                             this.setAgentStatus('dev', 'running');
                             
-                            // Only show notification if user is not already on dev tab
                             if (this.activeAgentTab !== 'dev') {
                                 this.addLogMessage('Dev Agent is generating code. Switch to Dev Agent (live code) tab to see output.', 'info');
                             }
@@ -4211,7 +3745,6 @@
                             this.addLogMessage(`LLM response stream completed for ${data.agent_id || 'an agent'} task ${data.task_id || ''}.`, 'info');
                             this.setTypingIndicator(false); // Hide typing indicator
                             this.setAgentStatus(data.agent_id || 'chat', 'complete'); // Set specific agent status to complete
-                            this.hideStopButton(); // Hide stop button when agents complete
                             break;
                         case 'task_status_update':
                             if (data.agent_id === 'dev') {
@@ -4220,35 +3753,35 @@
                                     const fileCount = data.saved_files?.length || 0;
                                     const filesList = data.saved_files?.slice(0, 3).join(', ') || 'files';
                                     const moreFiles = fileCount > 3 ? ` and ${fileCount - 3} more` : '';
-                                    this.addChatMessage(`${getAgentIcon('dev', 'complete')} **${getAgentLabel('dev')}**: Task completed! Generated ${fileCount} file(s): ${filesList}${moreFiles}. Check the file tree on the left.`, 'ai');
+                                    this.addChatMessage(`✅ **Dev Agent**: Task completed! Generated ${fileCount} file(s): ${filesList}${moreFiles}. Check the file tree on the left.`, 'ai');
                                 } else if (data.status === 'failed') {
                                     this.updatePmTask(data.task_id, { status: 'failed' });
-                                    this.addChatMessage(`${getAgentIcon('dev', 'error')} **${getAgentLabel('dev')}**: Code generation failed for this task. ${data.message || 'Reviewing and will retry...'}`, 'ai');
+                                    this.addChatMessage(`❌ **Dev Agent**: Code generation failed for this task. ${data.message || 'Reviewing and will retry...'}`, 'ai');
                                 }
                             } else if (data.agent_id === 'qa') {
                                 if (data.status === 'completed') {
-                                    this.addChatMessage(`${getAgentIcon('qa', 'complete')} **${getAgentLabel('qa')}**: All tests passed! Code quality verified. Moving forward.`, 'ai');
+                                    this.addChatMessage(`✅ **QA Agent**: All tests passed! Code quality verified. Moving forward.`, 'ai');
                                 } else if (data.status === 'failed') {
-                                    this.addChatMessage(`${getAgentIcon('qa', 'error')} **${getAgentLabel('qa')}**: Found issues during testing. ${data.message || 'Dev team will review the feedback.'}`, 'ai');
+                                    this.addChatMessage(`❌ **QA Agent**: Found issues during testing. ${data.message || 'Dev team will review the feedback.'}`, 'ai');
                                 }
                             } else if (data.agent_id === 'ops') {
                                 if (data.status === 'completed') {
-                                    this.addChatMessage(`${getAgentIcon('ops', 'complete')} **${getAgentLabel('ops')}**: Deployment complete! Your project is now live.`, 'ai');
-                                    this.updateOpsDeploymentStatus(`${getIconHTML('complete', 14)} Deployment Complete`, data.repo_url, data.deploy_url);
+                                    this.addChatMessage(`✅ **Ops Agent**: Deployment complete! Your project is now live.`, 'ai');
+                                    this.updateOpsDeploymentStatus('✅ Deployment Complete', data.repo_url, data.deploy_url);
                                 } else if (data.status === 'failed') {
-                                    this.addChatMessage(`${getAgentIcon('ops', 'warning')} **${getAgentLabel('ops')}**: Deployment encountered an issue: ${data.message || data.status}`, 'ai');
-                                    this.updateOpsDeploymentStatus(`${getIconHTML('failed', 14)} Deployment Failed: ${data.message || 'Unknown error'}`, data.repo_url, null);
+                                    this.addChatMessage(`⚠️ **Ops Agent**: Deployment encountered an issue: ${data.message || data.status}`, 'ai');
+                                    this.updateOpsDeploymentStatus(`❌ Deployment Failed: ${data.message || 'Unknown error'}`, data.repo_url, null);
                                 }
                             }
                             // Log detailed info for debugging
                             this.addLogMessage(`[${data.agent_id}] Task '${data.task_id}': ${data.status}`, 'info');
                             break;
                         case 'dev_task_complete_init_qa':
-                            this.addChatMessage(`${getAgentIcon('qa', 'testing')} **${getAgentLabel('qa')}**: Starting code review and testing. Checking for quality, functionality, and best practices...`, 'ai');
+                            this.addChatMessage(`🧪 **QA Agent**: Starting code review and testing. Checking for quality, functionality, and best practices...`, 'ai');
                             break;
                         case 'qa_testing_file':
                             if (data.file_name) {
-                                this.addChatMessage(`${getAgentIcon('qa', 'testing')} **${getAgentLabel('qa')}**: Testing file: \`${data.file_name}\`...`, 'ai');
+                                this.addChatMessage(`🧪 **QA Agent**: Testing file: \`${data.file_name}\`...`, 'ai');
                                 this.appendQaActivityLog(`Testing: ${data.file_name}`);
                             }
                             break;
@@ -4261,10 +3794,10 @@
                             }
                             break;
                         case 'qa_task_failed':
-                            this.addChatMessage(`${getAgentIcon('qa', 'error')} **${getAgentLabel('qa')}**: Found issues that need attention. Sending feedback to Dev Agent for corrections...`, 'ai');
+                            this.addChatMessage(`❌ **QA Agent**: Found issues that need attention. Sending feedback to Dev Agent for corrections...`, 'ai');
                             break;
                         case 'dev_task_failed':
-                            this.addChatMessage(`${getAgentIcon('dev', 'error')} **${getAgentLabel('dev')}**: Task failed. Analyzing the issue and preparing to retry with improvements...`, 'ai');
+                            this.addChatMessage(`❌ **Dev Agent**: Task failed. Analyzing the issue and preparing to retry with improvements...`, 'ai');
                             break;
                         case 'dev_summary':
                             // Display development summary with formatted markdown
@@ -4298,31 +3831,31 @@
                             }
                             break;
                         case 'all_dev_tasks_complete_init_ops':
-                            this.addChatMessage(`${getAgentIcon('ops', 'deploying')} **${getAgentLabel('ops')}**: All development and testing complete! Preparing deployment pipeline...`, 'ai');
+                            this.addChatMessage(`🚀 **Ops Agent**: All development and testing complete! Preparing deployment pipeline...`, 'ai');
                             break;
                         case 'ops_deployment_status':
                             if (data.status === 'completed') {
                                 const repoUrl = data.repo_url || 'GitHub repository';
                                 const deployUrl = data.deploy_url || '';
-                                let msg = `${getAgentIcon('ops', 'complete')} **${getAgentLabel('ops')}**: Deployment successful!\n\n`;
-                                msg += `${getIconHTML('folder', 14)} Repository: ${repoUrl}\n`;
+                                let msg = `✅ **Ops Agent**: Deployment successful! 🎉\n\n`;
+                                msg += `📦 Repository: ${repoUrl}\n`;
                                 if (deployUrl) {
                                     msg += `🌐 Live URL: ${deployUrl}\n`;
                                 }
                                 msg += `\nSwitch to the Ops Agent tab to see full deployment details and preview.`;
                                 this.addChatMessage(msg, 'ai');
-                                this.updateOpsDeploymentStatus(`${getIconHTML('success', 14)} Deployment Successful`, data.repo_url, data.deploy_url);
+                                this.updateOpsDeploymentStatus('✅ Deployment Successful', data.repo_url, data.deploy_url);
                             } else if (data.status === 'creating_repo') {
-                                this.addChatMessage(`${getAgentIcon('ops', 'creating')} **${getAgentLabel('ops')}**: Creating GitHub repository...`, 'ai');
-                                this.updateOpsDeploymentStatus(`${getIconHTML('folder', 14)} Creating Repository`, data.repo_url, null);
+                                this.addChatMessage(`📦 **Ops Agent**: Creating GitHub repository...`, 'ai');
+                                this.updateOpsDeploymentStatus('📦 Creating Repository', data.repo_url, null);
                             } else if (data.status === 'building') {
-                                this.addChatMessage(`${getAgentIcon('ops', 'building')} **${getAgentLabel('ops')}**: Building Docker image...`, 'ai');
-                                this.updateOpsDeploymentStatus(`${getIconHTML('building', 14)} Building Image`, this.deploymentInfo.repoUrl, null);
+                                this.addChatMessage(`🔧 **Ops Agent**: Building Docker image...`, 'ai');
+                                this.updateOpsDeploymentStatus('🔧 Building Image', this.deploymentInfo.repoUrl, null);
                             } else if (data.status === 'deploying') {
-                                this.addChatMessage(`${getAgentIcon('ops', 'deploying')} **${getAgentLabel('ops')}**: Deploying to production...`, 'ai');
-                                this.updateOpsDeploymentStatus(`${getIconHTML('deploying', 14)} Deploying`, this.deploymentInfo.repoUrl, null);
+                                this.addChatMessage(`🚀 **Ops Agent**: Deploying to production...`, 'ai');
+                                this.updateOpsDeploymentStatus('🚀 Deploying', this.deploymentInfo.repoUrl, null);
                             } else {
-                                this.addChatMessage(`${getAgentIcon('ops', 'warning')} **${getAgentLabel('ops')}**: Deployment status update - ${data.status}`, 'ai');
+                                this.addChatMessage(`⚠️ **Ops Agent**: Deployment status update - ${data.status}`, 'ai');
                                 this.updateOpsDeploymentStatus(data.status, data.repo_url, data.deploy_url);
                             }
                             break;
@@ -4335,7 +3868,7 @@
                                 this.handleFileGenerated(data);
                                 this.renderFileTree();
                                 // Show brief notification in chat
-                                this.addChatMessage(`${getAgentIcon('dev', 'creating')} **${getAgentLabel('dev')}**: Created file: \`${data.file_name}\``, 'ai');
+                                this.addChatMessage(`📄 **Dev Agent**: Created file: \`${data.file_name}\``, 'ai');
                                 // Show file notification in Dev Agent tab
                                 if (this.devAgentOutput) {
                                     const fileNotice = document.createElement('div');
@@ -4420,7 +3953,6 @@
                             this.showActiveAgentPanel('chat'); // Return to chat on error
                             this.setTypingIndicator(false); // Hide typing indicator
                             this.setAgentStatus(data.agent_id || 'chat', 'error'); // Set specific agent status to error
-                            this.hideStopButton(); // Hide stop button on error
                             break;
                         case 'dev_agent_documentation':
                             // Do NOT show dev agent documentation/context in chat panel
@@ -4467,10 +3999,6 @@
                     if (show) {
                         this.chatHistoryContainer.scrollTop = this.chatHistoryContainer.scrollHeight;
                     }
-                }
-                // Update Akino avatar thinking state
-                if (window.akinoAvatar) {
-                    window.akinoAvatar.setThinking(show);
                 }
             }
             setAgentStatus(agentId, status) {
@@ -4695,8 +4223,6 @@
                 try {
                     this.ws.send(JSON.stringify(payload));
                     this.addLogMessage('Message sent to server.', 'info');
-                    // Show stop button when agents start running
-                    this.showStopButton();
                 } catch (err) {
                     this.addLogMessage('Failed to send message: ' + err, 'error');
                     this.showMessage('Failed to send message. See logs for details.');
@@ -4704,58 +4230,6 @@
                     this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
                     this.setTypingIndicator(false); // Hide typing indicator on error
                     this.setAgentStatus('chat', 'error'); // Set chat agent status to error
-                }
-            }
-            
-            stopAgents() {
-                this.addLogMessage('Stop button clicked - requesting agent termination', 'info');
-                
-                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                    this.showMessage('Cannot stop agents - not connected to server.');
-                    return;
-                }
-                
-                // Send stop signal to backend
-                const payload = {
-                    type: 'stop_agents',
-                    message: 'User requested to stop agent execution'
-                };
-                
-                try {
-                    this.ws.send(JSON.stringify(payload));
-                    this.addLogMessage('Stop signal sent to server', 'info');
-                    this.addChatMessage('🛑 **System**: Stopping agent execution... This may take a moment.', 'ai');
-                    
-                    // Update UI immediately
-                    this.hideStopButton();
-                    this.sendMessageBtn.disabled = false;
-                    this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
-                    this.setTypingIndicator(false);
-                    this.setAgentStatus('chat', 'idle');
-                    
-                } catch (err) {
-                    this.addLogMessage('Failed to send stop signal: ' + err, 'error');
-                    this.showMessage('Failed to stop agents. See logs for details.');
-                }
-            }
-            
-            showStopButton() {
-                this.agentsRunning = true;
-                if (this.stopAgentsBtn) {
-                    this.stopAgentsBtn.classList.remove('hidden');
-                }
-                if (this.sendMessageBtn) {
-                    this.sendMessageBtn.classList.add('hidden');
-                }
-            }
-            
-            hideStopButton() {
-                this.agentsRunning = false;
-                if (this.stopAgentsBtn) {
-                    this.stopAgentsBtn.classList.add('hidden');
-                }
-                if (this.sendMessageBtn) {
-                    this.sendMessageBtn.classList.remove('hidden');
                 }
             }
             /**
@@ -4810,7 +4284,6 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', () => {
             window.dashboardInstance = new PlanningDashboard();
-            window.akinoAvatar = new AkinoLiveAvatar();
         });
     </script>
 </body>

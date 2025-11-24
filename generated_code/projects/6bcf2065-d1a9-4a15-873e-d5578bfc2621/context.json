@@ -1,0 +1,36 @@
+{
+  "id": "6bcf2065-d1a9-4a15-873e-d5578bfc2621",
+  "name": "Mario Game MVP",
+  "type": "other",
+  "status": "in_progress",
+  "owner_id": "default_user",
+  "created_at": "2025-11-20T16:12:38.368790",
+  "updated_at": "2025-11-20T16:12:38.391273",
+  "last_deployed_at": null,
+  "codebase": {},
+  "dependencies": [],
+  "modifications": [
+    {
+      "id": "6bcf2065-d1a9-4a15-873e-d5578bfc2621_init",
+      "timestamp": "2025-11-20T16:12:38.391236",
+      "description": "Initial project creation: Mario Game MVP",
+      "affected_files": [],
+      "requested_by": "default_user",
+      "status": "applied"
+    }
+  ],
+  "deployments": [],
+  "environment_vars": {},
+  "deployment_config": {
+    "platform": "render",
+    "environment": "production",
+    "auto_deploy": false,
+    "health_check_enabled": true,
+    "monitoring_enabled": false
+  },
+  "test_coverage": 0.0,
+  "security_score": 0.0,
+  "performance_score": 0.0,
+  "description": "Basic platformer with character movement, levels, and simple enemies.",
+  "repository_url": null
+}

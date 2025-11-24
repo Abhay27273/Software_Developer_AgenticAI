@@ -1,0 +1,36 @@
+{
+  "id": "1e23a539-6fe1-426b-a2db-8fa44d6e14be",
+  "name": "Mario-like Platformer MVP",
+  "type": "other",
+  "status": "in_progress",
+  "owner_id": "default_user",
+  "created_at": "2025-11-20T16:26:37.263554",
+  "updated_at": "2025-11-20T16:26:37.284333",
+  "last_deployed_at": null,
+  "codebase": {},
+  "dependencies": [],
+  "modifications": [
+    {
+      "id": "1e23a539-6fe1-426b-a2db-8fa44d6e14be_init",
+      "timestamp": "2025-11-20T16:26:37.284280",
+      "description": "Initial project creation: Mario-like Platformer MVP",
+      "affected_files": [],
+      "requested_by": "default_user",
+      "status": "applied"
+    }
+  ],
+  "deployments": [],
+  "environment_vars": {},
+  "deployment_config": {
+    "platform": "render",
+    "environment": "production",
+    "auto_deploy": false,
+    "health_check_enabled": true,
+    "monitoring_enabled": false
+  },
+  "test_coverage": 0.0,
+  "security_score": 0.0,
+  "performance_score": 0.0,
+  "description": "Develop a basic 2D platformer game with player movement, level, and simple interactions.",
+  "repository_url": null
+}

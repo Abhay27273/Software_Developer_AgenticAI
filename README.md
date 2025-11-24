@@ -1,2 +1,0 @@
-# Software_Developer_AgenticAI
-Software_Developer_AgenticAI

@@ -1,0 +1,14 @@
+version = 0.1
+
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "agenticai-stack"
+s3_bucket = "agenticai-sam-artifacts-379929762201"
+s3_prefix = "agenticai-stack"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+parameter_overrides = "Environment=\"prod\" BudgetAlertEmail=\"abhay.optimus.2727@gmail.com\" AdminEmail=\"abhay.optimus.2727@gmail.com\""
+confirm_changeset = true
+resolve_s3 = false
+disable_rollback = false

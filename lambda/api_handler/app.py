@@ -4,7 +4,7 @@ API Handler Lambda Function
 This Lambda function handles all REST API requests from API Gateway.
 It provides endpoints for project management, template operations, and modifications.
 
-Requirements: 1.3, 2.2
+Requirements: 1.3, 2.2, 1.5, 6.3, 6.5
 """
 
 import json
@@ -36,6 +36,14 @@ SQS_QUEUE_URL_OPS = os.environ.get('SQS_QUEUE_URL_OPS', '')
 # DynamoDB table
 table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 
+# Import rate limit utilities (from Lambda layer)
+try:
+    from utils.rate_limit_headers import add_rate_limit_headers
+except ImportError:
+    # Fallback if not in Lambda environment
+    def add_rate_limit_headers(response, api_key_id=None, usage_plan_id=None):
+        return response
+
 
 def get_secret(name: str) -> str:
     """Retrieve secret from Parameter Store."""
@@ -50,21 +58,27 @@ def get_secret(name: str) -> str:
         raise
 
 
-def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a standardized API Gateway response."""
-    return {
+def create_response(status_code: int, body: Dict[str, Any], api_key_id: Optional[str] = None, usage_plan_id: Optional[str] = None) -> Dict[str, Any]:
+    """Create a standardized API Gateway response with rate limit headers."""
+    response = {
         'statusCode': status_code,
         'headers': {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-API-Key',
             'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
         },
         'body': json.dumps(body)
     }
+    
+    # Add rate limit headers if we have the necessary information
+    if api_key_id and usage_plan_id:
+        response = add_rate_limit_headers(response, api_key_id, usage_plan_id)
+    
+    return response
 
 
-def create_error_response(status_code: int, error_code: str, message: str, details: Optional[Dict] = None) -> Dict[str, Any]:
+def create_error_response(status_code: int, error_code: str, message: str, details: Optional[Dict] = None, api_key_id: Optional[str] = None, usage_plan_id: Optional[str] = None) -> Dict[str, Any]:
     """Create a standardized error response."""
     error_body = {
         'success': False,
@@ -77,7 +91,17 @@ def create_error_response(status_code: int, error_code: str, message: str, detai
     if details:
         error_body['error']['details'] = details
     
-    return create_response(status_code, error_body)
+    # Log rate limit violations
+    if status_code == 429:
+        rate_limit_log = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'api_key_id': api_key_id if api_key_id else 'unknown',
+            'error_code': error_code,
+            'message': message
+        }
+        logger.warning(f"Rate limit violation: {json.dumps(rate_limit_log)}")
+    
+    return create_response(status_code, error_body, api_key_id, usage_plan_id)
 
 
 # ============================================================================
@@ -209,10 +233,12 @@ def update_project(project_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         # Build update expression
         update_expr = 'SET updated_at = :updated_at'
         expr_values = {':updated_at': datetime.utcnow().isoformat()}
+        expr_names = {}
         
         if 'name' in body:
             update_expr += ', #name = :name'
             expr_values[':name'] = body['name']
+            expr_names['#name'] = 'name'
         
         if 'description' in body:
             update_expr += ', description = :description'
@@ -221,21 +247,25 @@ def update_project(project_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         if 'status' in body:
             update_expr += ', #status = :status'
             expr_values[':status'] = body['status']
+            expr_names['#status'] = 'status'
         
-        # Update DynamoDB
-        response = table.update_item(
-            Key={
+        # Build update_item parameters
+        update_params = {
+            'Key': {
                 'PK': f'PROJECT#{project_id}',
                 'SK': 'METADATA'
             },
-            UpdateExpression=update_expr,
-            ExpressionAttributeValues=expr_values,
-            ExpressionAttributeNames={
-                '#name': 'name',
-                '#status': 'status'
-            },
-            ReturnValues='ALL_NEW'
-        )
+            'UpdateExpression': update_expr,
+            'ExpressionAttributeValues': expr_values,
+            'ReturnValues': 'ALL_NEW'
+        }
+        
+        # Only add ExpressionAttributeNames if we have any
+        if expr_names:
+            update_params['ExpressionAttributeNames'] = expr_names
+        
+        # Update DynamoDB
+        response = table.update_item(**update_params)
         
         return create_response(200, {
             'success': True,
@@ -349,16 +379,16 @@ def list_templates(query_params: Dict[str, Any]) -> Dict[str, Any]:
     try:
         category = query_params.get('category')
         
-        # Query templates
-        query_kwargs = {
-            'KeyConditionExpression': 'begins_with(PK, :template_prefix) AND SK = :metadata',
+        # Scan for templates with filter
+        scan_kwargs = {
+            'FilterExpression': 'begins_with(PK, :template_prefix) AND SK = :metadata',
             'ExpressionAttributeValues': {
                 ':template_prefix': 'TEMPLATE#',
                 ':metadata': 'METADATA'
             }
         }
         
-        response = table.scan(**query_kwargs)
+        response = table.scan(**scan_kwargs)
         templates = response.get('Items', [])
         
         # Filter by category if provided
@@ -424,11 +454,42 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Routes requests to appropriate handlers based on HTTP method and path.
     """
     try:
-        # Log request
-        logger.info(f"Received request: {event.get('httpMethod')} {event.get('path')}")
+        # Extract authentication information
+        request_context = event.get('requestContext', {})
+        identity = request_context.get('identity', {})
+        api_key_id = request_context.get('identity', {}).get('apiKeyId')
+        source_ip = identity.get('sourceIp', 'unknown')
+        user_agent = identity.get('userAgent', 'unknown')
+        request_id = request_context.get('requestId', 'unknown')
         
         http_method = event.get('httpMethod', '')
         path = event.get('path', '')
+        
+        # Log authentication attempt
+        auth_log = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'request_id': request_id,
+            'api_key_id': api_key_id if api_key_id else 'none',
+            'source_ip': source_ip,
+            'user_agent': user_agent,
+            'method': http_method,
+            'path': path,
+            'result': 'success' if api_key_id else 'missing_key'
+        }
+        
+        # Log authentication attempt
+        logger.info(f"Authentication attempt: {json.dumps(auth_log)}")
+        
+        # Check if API key is present (API Gateway handles validation)
+        if not api_key_id and path != '/health':
+            # Log authentication failure
+            auth_log['result'] = 'unauthorized'
+            logger.warning(f"Authentication failed: {json.dumps(auth_log)}")
+            return create_error_response(401, 'UNAUTHORIZED', 'API key is required')
+        
+        # Log request
+        logger.info(f"Received request: {http_method} {path} from {source_ip}")
+        
         query_params = event.get('queryStringParameters') or {}
         body = {}
         

@@ -15,9 +15,13 @@ from typing import Dict, Any, List
 import boto3
 from botocore.exceptions import ClientError
 
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+# Import structured logger
+import sys
+sys.path.insert(0, '/opt/python')
+from utils.logger import get_logger, log_lambda_event, log_lambda_response, log_error
+
+# Initialize structured logger
+logger = get_logger('pm-agent')
 
 # Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')
@@ -44,7 +48,12 @@ def get_secret(name: str) -> str:
         )
         return response['Parameter']['Value']
     except ClientError as e:
-        logger.error(f"Error retrieving secret {name}: {e}")
+        logger.error(
+            f"Error retrieving secret {name}",
+            event_type='parameter_store_error',
+            error=e,
+            parameter_name=name
+        )
         raise
 
 
@@ -132,7 +141,13 @@ def save_plan_to_dynamodb(project_id: str, plan: Dict[str, Any]) -> str:
     }
     
     table.put_item(Item=plan_item)
-    logger.info(f"Saved plan {plan_id} for project {project_id}")
+    logger.info(
+        f"Saved plan {plan_id} for project {project_id}",
+        event_type='plan_saved',
+        project_id=project_id,
+        plan_id=plan_id,
+        tasks_count=len(plan.get('tasks', []))
+    )
     
     return plan_id
 
@@ -147,9 +162,21 @@ def save_plan_to_s3(project_id: str, plan_id: str, plan: Dict[str, Any]):
             Body=json.dumps(plan, indent=2),
             ContentType='application/json'
         )
-        logger.info(f"Saved plan to S3: {s3_key}")
+        logger.info(
+            f"Saved plan to S3: {s3_key}",
+            event_type='plan_saved_s3',
+            project_id=project_id,
+            plan_id=plan_id,
+            s3_key=s3_key
+        )
     except Exception as e:
-        logger.error(f"Error saving plan to S3: {e}")
+        logger.error(
+            f"Error saving plan to S3",
+            event_type='s3_error',
+            error=e,
+            project_id=project_id,
+            plan_id=plan_id
+        )
 
 
 def send_tasks_to_dev_queue(project_id: str, plan_id: str, tasks: List[Dict[str, Any]]):
@@ -285,7 +312,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     Processes SQS messages containing planning tasks.
     """
-    logger.info(f"PM Agent worker invoked with {len(event.get('Records', []))} messages")
+    # Log Lambda invocation with context
+    log_lambda_event(event, context, logger)
+    
+    # Set request ID for tracking
+    logger.set_request_id(context.aws_request_id)
+    
+    logger.info(
+        f"PM Agent worker invoked",
+        event_type='worker_invoked',
+        messages_count=len(event.get('Records', []))
+    )
     
     results = []
     errors = []
@@ -299,11 +336,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             result = process_planning_task(message_body)
             results.append(result)
             
-            logger.info(f"Successfully processed message: {record['messageId']}")
+            logger.info(
+                f"Successfully processed message",
+                event_type='message_processed',
+                message_id=record['messageId'],
+                project_id=result.get('project_id')
+            )
             
         except Exception as e:
-            error_msg = f"Error processing message {record.get('messageId')}: {str(e)}"
-            logger.error(error_msg, exc_info=True)
+            logger.error(
+                f"Error processing message",
+                event_type='message_error',
+                error=e,
+                message_id=record.get('messageId')
+            )
             errors.append({
                 'messageId': record.get('messageId'),
                 'error': str(e)
@@ -319,7 +365,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if errors:
         response['error_details'] = errors
     
-    logger.info(f"PM Agent worker completed: {response}")
+    logger.info(
+        f"PM Agent worker completed",
+        event_type='worker_completed',
+        processed=len(results),
+        errors=len(errors)
+    )
+    
+    # Log Lambda response
+    log_lambda_response(response, context, logger)
     
     # If there were errors, raise exception to trigger retry/DLQ
     if errors:

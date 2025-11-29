@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI-powered Software Development Agentic System
+Description: AI-powered Software Development Agentic System (Serverless Only)
 
 Globals:
   Function:
-    Runtime: python3.11
+    Runtime: python3.13
     Timeout: 30
     MemorySize: 512
     Environment:
@@ -28,21 +28,94 @@ Parameters:
       - prod
     Description: Deployment environment
 
+  BudgetAlertEmail:
+    Type: String
+    Description: Email address for budget alerts
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+
+  AdminEmail:
+    Type: String
+    Description: Email address for operational alerts (errors, performance issues)
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+
 Resources:
-  # Shared Lambda Layer
+  # --- STORAGE ---
+  CodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub agenticai-code-${AWS::AccountId}-${Environment}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+
+  DataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub agenticai-data-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # --- MESSAGING (SQS) ---
+  PMQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub agenticai-pm-queue-${Environment}
+      VisibilityTimeout: 360
+      MessageRetentionPeriod: 345600
+
+  DevQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub agenticai-dev-queue-${Environment}
+      VisibilityTimeout: 960
+      MessageRetentionPeriod: 345600
+
+  QAQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub agenticai-qa-queue-${Environment}
+      VisibilityTimeout: 660
+      MessageRetentionPeriod: 345600
+
+  OpsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub agenticai-ops-queue-${Environment}
+      VisibilityTimeout: 360
+      MessageRetentionPeriod: 345600
+
+  # --- LAMBDA LAYER ---
   SharedLayer:
     Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: python3.13
     Properties:
       LayerName: !Sub agenticai-shared-${Environment}
-      Description: Shared utilities for AgenticAI Lambda functions
       ContentUri: lambda/shared/
       CompatibleRuntimes:
-        - python3.11
-      RetentionPolicy: Retain
-    Metadata:
-      BuildMethod: python3.11
+        - python3.13
 
-  # IAM Role for Lambda Functions
+  # --- IAM ROLES ---
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -57,697 +130,366 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-      Policies:
-        - PolicyName: DynamoDBAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                  - dynamodb:BatchGetItem
-                  - dynamodb:BatchWriteItem
-                Resource:
-                  - !GetAtt DataTable.Arn
-                  - !Sub ${DataTable.Arn}/index/*
-        - PolicyName: S3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt CodeBucket.Arn
-                  - !Sub ${CodeBucket.Arn}/*
-        - PolicyName: SQSAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                  - sqs:ReceiveMessage
-                  - sqs:DeleteMessage
-                  - sqs:GetQueueAttributes
-                  - sqs:ChangeMessageVisibility
-                Resource:
-                  - !GetAtt PMQueue.Arn
-                  - !GetAtt DevQueue.Arn
-                  - !GetAtt QAQueue.Arn
-                  - !GetAtt OpsQueue.Arn
-        - PolicyName: ParameterStoreAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                  - ssm:GetParametersByPath
-                Resource:
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/agenticai/${Environment}/*
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                Resource: '*'
-                Condition:
-                  StringEquals:
-                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
 
-  # DynamoDB Table with Single-Table Design
-  DataTable:
-    Type: AWS::DynamoDB::Table
+  # --- FUNCTIONS ---
+  ApiHandler:
+    Type: AWS::Serverless::Function
     Properties:
-      TableName: !Sub agenticai-data-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: PK
-          AttributeType: S
-        - AttributeName: SK
-          AttributeType: S
-        - AttributeName: GSI1PK
-          AttributeType: S
-        - AttributeName: GSI1SK
-          AttributeType: S
-        - AttributeName: GSI2PK
-          AttributeType: S
-        - AttributeName: GSI2SK
-          AttributeType: S
-      KeySchema:
-        - AttributeName: PK
-          KeyType: HASH
-        - AttributeName: SK
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: GSI1
-          KeySchema:
-            - AttributeName: GSI1PK
-              KeyType: HASH
-            - AttributeName: GSI1SK
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        - IndexName: GSI2
-          KeySchema:
-            - AttributeName: GSI2PK
-              KeyType: HASH
-            - AttributeName: GSI2SK
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
-      StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      FunctionName: !Sub agenticai-api-handler-${Environment}
+      CodeUri: lambda/api_handler/
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SQS_QUEUE_URL_PM: !Ref PMQueue
+          SQS_QUEUE_URL_DEV: !Ref DevQueue
+          SQS_QUEUE_URL_QA: !Ref QAQueue
+          SQS_QUEUE_URL_OPS: !Ref OpsQueue
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref RestApi
+            Auth:
+              ApiKeyRequired: true
 
-  # S3 Bucket for Generated Code
-  CodeBucket:
-    Type: AWS::S3::Bucket
+  PMAgentWorker:
+    Type: AWS::Serverless::Function
     Properties:
-      BucketName: !Sub agenticai-generated-code-${AWS::AccountId}-${Environment}
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpirationInDays: 30
-          - Id: DeleteOldFiles
-            Status: Enabled
-            ExpirationInDays: 90
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      FunctionName: !Sub agenticai-pm-agent-${Environment}
+      CodeUri: lambda/pm_agent/
+      Handler: worker.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt PMQueue.Arn
+            BatchSize: 1
 
-  # SQS Queue for PM Agent
-  PMQueue:
-    Type: AWS::SQS::Queue
+  DevAgentWorker:
+    Type: AWS::Serverless::Function
     Properties:
-      QueueName: !Sub agenticai-pm-queue-${Environment}
-      VisibilityTimeout: 360
-      MessageRetentionPeriod: 345600
-      ReceiveMessageWaitTimeSeconds: 20
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt PMDLQ.Arn
-        maxReceiveCount: 3
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      FunctionName: !Sub agenticai-dev-agent-${Environment}
+      CodeUri: lambda/dev_agent/
+      Handler: worker.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 900
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DevQueue.Arn
+            BatchSize: 1
 
-  PMDLQ:
-    Type: AWS::SQS::Queue
+  QAAgentWorker:
+    Type: AWS::Serverless::Function
     Properties:
-      QueueName: !Sub agenticai-pm-dlq-${Environment}
-      MessageRetentionPeriod: 1209600
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      FunctionName: !Sub agenticai-qa-agent-${Environment}
+      CodeUri: lambda/qa_agent/
+      Handler: worker.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 600
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt QAQueue.Arn
+            BatchSize: 1
 
-  # SQS Queue for Dev Agent
-  DevQueue:
-    Type: AWS::SQS::Queue
+  OpsAgentWorker:
+    Type: AWS::Serverless::Function
     Properties:
-      QueueName: !Sub agenticai-dev-queue-${Environment}
-      VisibilityTimeout: 960
-      MessageRetentionPeriod: 345600
-      ReceiveMessageWaitTimeSeconds: 20
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt DevDLQ.Arn
-        maxReceiveCount: 3
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      FunctionName: !Sub agenticai-ops-agent-${Environment}
+      CodeUri: lambda/ops_agent/
+      Handler: worker.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OpsQueue.Arn
+            BatchSize: 1
 
-  DevDLQ:
-    Type: AWS::SQS::Queue
+  # --- API GATEWAY ---
+  RestApi:
+    Type: AWS::Serverless::Api
     Properties:
-      QueueName: !Sub agenticai-dev-dlq-${Environment}
-      MessageRetentionPeriod: 1209600
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      StageName: prod
+      Cors:
+        AllowOrigin: "'*'"
+        AllowHeaders: "'*'"
+        AllowMethods: "'*'"
 
-  # SQS Queue for QA Agent
-  QAQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub agenticai-qa-queue-${Environment}
-      VisibilityTimeout: 660
-      MessageRetentionPeriod: 345600
-      ReceiveMessageWaitTimeSeconds: 20
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt QADLQ.Arn
-        maxReceiveCount: 3
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  QADLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub agenticai-qa-dlq-${Environment}
-      MessageRetentionPeriod: 1209600
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  # SQS Queue for Ops Agent
-  OpsQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub agenticai-ops-queue-${Environment}
-      VisibilityTimeout: 360
-      MessageRetentionPeriod: 345600
-      ReceiveMessageWaitTimeSeconds: 20
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt OpsDLQ.Arn
-        maxReceiveCount: 3
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  OpsDLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub agenticai-ops-dlq-${Environment}
-      MessageRetentionPeriod: 1209600
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  # VPC for ECS Fargate
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub agenticai-vpc-${Environment}
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Public Subnets for ECS
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub agenticai-public-subnet-1-${Environment}
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub agenticai-public-subnet-2-${Environment}
-
-  # Internet Gateway
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub agenticai-igw-${Environment}
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  # Route Table
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub agenticai-public-rt-${Environment}
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  SubnetRouteTableAssociation1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  SubnetRouteTableAssociation2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  # Security Group for WebSocket Handler
-  WebSocketSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub agenticai-websocket-sg-${Environment}
-      GroupDescription: Security group for WebSocket handler
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          CidrIp: 0.0.0.0/0
-          Description: WebSocket traffic
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: Allow all outbound traffic
-      Tags:
-        - Key: Name
-          Value: !Sub agenticai-websocket-sg-${Environment}
-
-  # ECS Cluster
-  ECSCluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Sub agenticai-cluster-${Environment}
-      CapacityProviders:
-        - FARGATE
-        - FARGATE_SPOT
-      DefaultCapacityProviderStrategy:
-        - CapacityProvider: FARGATE
-          Weight: 1
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  # CloudWatch Log Group for WebSocket Handler
-  WebSocketLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /ecs/agenticai-websocket-${Environment}
-      RetentionInDays: 7
-
-  # IAM Role for ECS Task Execution
-  ECSTaskExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub agenticai-ecs-execution-role-${Environment}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-      Policies:
-        - PolicyName: ParameterStoreAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameters
-                  - ssm:GetParameter
-                Resource:
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/agenticai/${Environment}/*
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                Resource: '*'
-
-  # IAM Role for ECS Task
-  ECSTaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub agenticai-ecs-task-role-${Environment}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: SQSAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                  - sqs:GetQueueUrl
-                Resource:
-                  - !GetAtt PMQueue.Arn
-                  - !GetAtt DevQueue.Arn
-                  - !GetAtt QAQueue.Arn
-                  - !GetAtt OpsQueue.Arn
-        - PolicyName: DynamoDBAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:Query
-                Resource:
-                  - !GetAtt DataTable.Arn
-                  - !Sub ${DataTable.Arn}/index/*
-
-  # ECR Repository for WebSocket Handler
-  WebSocketRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub agenticai-websocket-${Environment}
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      LifecyclePolicy:
-        LifecyclePolicyText: |
-          {
-            "rules": [
-              {
-                "rulePriority": 1,
-                "description": "Keep last 5 images",
-                "selection": {
-                  "tagStatus": "any",
-                  "countType": "imageCountMoreThan",
-                  "countNumber": 5
-                },
-                "action": {
-                  "type": "expire"
-                }
-              }
-            ]
-          }
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  # ECS Task Definition for WebSocket Handler
-  WebSocketTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: !Sub agenticai-websocket-${Environment}
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
-      Cpu: '256'
-      Memory: '512'
-      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt ECSTaskRole.Arn
-      ContainerDefinitions:
-        - Name: websocket-handler
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WebSocketRepository}:latest
-          Essential: true
-          PortMappings:
-            - ContainerPort: 8080
-              Protocol: tcp
-          Environment:
-            - Name: AWS_REGION
-              Value: !Ref AWS::Region
-            - Name: DYNAMODB_TABLE_NAME
-              Value: !Ref DataTable
-            - Name: SQS_QUEUE_URL_PM
-              Value: !Ref PMQueue
-            - Name: SQS_QUEUE_URL_DEV
-              Value: !Ref DevQueue
-            - Name: SQS_QUEUE_URL_QA
-              Value: !Ref QAQueue
-            - Name: SQS_QUEUE_URL_OPS
-              Value: !Ref OpsQueue
-            - Name: WEBSOCKET_PORT
-              Value: '8080'
-            - Name: WEBSOCKET_HOST
-              Value: '0.0.0.0'
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref WebSocketLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: websocket
-          HealthCheck:
-            Command:
-              - CMD-SHELL
-              - python -c "import socket; s=socket.socket(); s.connect(('localhost', 8080)); s.close()" || exit 1
-            Interval: 30
-            Timeout: 5
-            Retries: 3
-            StartPeriod: 60
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
-
-  # ECS Service for WebSocket Handler
-  WebSocketService:
-    Type: AWS::ECS::Service
+  # API Key for authentication
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
     DependsOn:
-      - WebSocketTargetGroup
-      - WebSocketListener
+      - RestApiProdStage
     Properties:
-      ServiceName: !Sub agenticai-websocket-${Environment}
-      Cluster: !Ref ECSCluster
-      TaskDefinition: !Ref WebSocketTaskDefinition
-      DesiredCount: 1
-      LaunchType: FARGATE
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          Subnets:
-            - !Ref PublicSubnet1
-            - !Ref PublicSubnet2
-          SecurityGroups:
-            - !Ref WebSocketSecurityGroup
-      LoadBalancers:
-        - ContainerName: websocket-handler
-          ContainerPort: 8080
-          TargetGroupArn: !Ref WebSocketTargetGroup
-      HealthCheckGracePeriodSeconds: 60
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      Name: !Sub agenticai-api-key-${Environment}
+      Description: API Key for AgenticAI API access
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref RestApi
+          StageName: prod
 
-  # Application Load Balancer for WebSocket
-  WebSocketALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  # Usage Plan with rate limiting
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - RestApiProdStage
     Properties:
-      Name: !Sub agenticai-ws-alb-${Environment}
-      Type: application
-      Scheme: internet-facing
-      IpAddressType: ipv4
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref WebSocketSecurityGroup
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      UsagePlanName: !Sub agenticai-usage-plan-${Environment}
+      Description: Usage plan with rate limiting for AgenticAI API
+      ApiStages:
+        - ApiId: !Ref RestApi
+          Stage: prod
+      Throttle:
+        RateLimit: 1000
+        BurstLimit: 2000
+      Quota:
+        Limit: 1000
+        Period: HOUR
 
-  # Target Group for WebSocket
-  WebSocketTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  # Associate API Key with Usage Plan
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
     Properties:
-      Name: !Sub agenticai-ws-tg-${Environment}
-      Port: 8080
-      Protocol: HTTP
-      TargetType: ip
-      VpcId: !Ref VPC
-      HealthCheckEnabled: true
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: '30'
-      Tags:
-        - Key: Application
-          Value: AgenticAI
-        - Key: Environment
-          Value: !Ref Environment
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
 
-  # Listener for WebSocket ALB
-  WebSocketListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
+  # Store API Key in Parameter Store
+  ApiKeyParameter:
+    Type: AWS::SSM::Parameter
     Properties:
-      LoadBalancerArn: !Ref WebSocketALB
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref WebSocketTargetGroup
+      Name: !Sub /agenticai/${Environment}/api-key
+      Description: API Key for AgenticAI API access
+      Type: String
+      Value: !Ref ApiKey
+
+  # --- ALERTING (SNS) ---
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub agenticai-alerts-${Environment}
+      DisplayName: AgenticAI Production Alerts
+      Subscription:
+        - Endpoint: !Ref AdminEmail
+          Protocol: email
+
+  # --- CLOUDWATCH ALARMS ---
+  # Lambda Error Rate Alarm
+  LambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-lambda-error-rate-${Environment}
+      AlarmDescription: Lambda error rate exceeded 5% over 5 minutes
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiHandler
+
+  # Lambda Consecutive Failures Alarm (API Handler)
+  ApiHandlerConsecutiveFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-api-handler-consecutive-failures-${Environment}
+      AlarmDescription: API Handler Lambda failed 3 consecutive times
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiHandler
+
+  # Lambda Consecutive Failures Alarm (PM Agent)
+  PMAgentConsecutiveFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-pm-agent-consecutive-failures-${Environment}
+      AlarmDescription: PM Agent Lambda failed 3 consecutive times
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PMAgentWorker
+
+  # Lambda Consecutive Failures Alarm (Dev Agent)
+  DevAgentConsecutiveFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-dev-agent-consecutive-failures-${Environment}
+      AlarmDescription: Dev Agent Lambda failed 3 consecutive times
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DevAgentWorker
+
+  # Lambda Consecutive Failures Alarm (QA Agent)
+  QAAgentConsecutiveFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-qa-agent-consecutive-failures-${Environment}
+      AlarmDescription: QA Agent Lambda failed 3 consecutive times
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref QAAgentWorker
+
+  # Lambda Consecutive Failures Alarm (Ops Agent)
+  OpsAgentConsecutiveFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-ops-agent-consecutive-failures-${Environment}
+      AlarmDescription: Ops Agent Lambda failed 3 consecutive times
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref OpsAgentWorker
+
+  # API Gateway 5XX Error Alarm
+  ApiGateway5XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub agenticai-api-gateway-5xx-errors-${Environment}
+      AlarmDescription: API Gateway 5XX errors exceeded 10 over 5 minutes
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref RestApi
 
 Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint
+
   DataTableName:
-    Description: DynamoDB table name
+    Description: "DynamoDB table name"
     Value: !Ref DataTable
     Export:
       Name: !Sub ${AWS::StackName}-DataTableName
 
   DataTableArn:
-    Description: DynamoDB table ARN
+    Description: "DynamoDB table ARN"
     Value: !GetAtt DataTable.Arn
     Export:
       Name: !Sub ${AWS::StackName}-DataTableArn
 
   CodeBucketName:
-    Description: S3 bucket name for generated code
+    Description: "S3 bucket for generated code"
     Value: !Ref CodeBucket
     Export:
       Name: !Sub ${AWS::StackName}-CodeBucketName
 
   PMQueueUrl:
-    Description: PM Agent SQS Queue URL
+    Description: "PM Agent SQS Queue URL"
     Value: !Ref PMQueue
     Export:
       Name: !Sub ${AWS::StackName}-PMQueueUrl
 
   DevQueueUrl:
-    Description: Dev Agent SQS Queue URL
+    Description: "Dev Agent SQS Queue URL"
     Value: !Ref DevQueue
     Export:
       Name: !Sub ${AWS::StackName}-DevQueueUrl
 
   QAQueueUrl:
-    Description: QA Agent SQS Queue URL
+    Description: "QA Agent SQS Queue URL"
     Value: !Ref QAQueue
     Export:
       Name: !Sub ${AWS::StackName}-QAQueueUrl
 
   OpsQueueUrl:
-    Description: Ops Agent SQS Queue URL
+    Description: "Ops Agent SQS Queue URL"
     Value: !Ref OpsQueue
     Export:
       Name: !Sub ${AWS::StackName}-OpsQueueUrl
 
-  WebSocketEndpoint:
-    Description: WebSocket endpoint URL
-    Value: !Sub http://${WebSocketALB.DNSName}
+  AlertTopicArn:
+    Description: "SNS Topic ARN for alerts"
+    Value: !Ref AlertTopic
     Export:
-      Name: !Sub ${AWS::StackName}-WebSocketEndpoint
+      Name: !Sub ${AWS::StackName}-AlertTopicArn
 
-  ECSClusterName:
-    Description: ECS Cluster name
-    Value: !Ref ECSCluster
+  ApiKeyId:
+    Description: "API Key ID for authentication"
+    Value: !Ref ApiKey
     Export:
-      Name: !Sub ${AWS::StackName}-ECSClusterName
+      Name: !Sub ${AWS::StackName}-ApiKeyId
 
-  WebSocketServiceName:
-    Description: WebSocket ECS Service name
-    Value: !GetAtt WebSocketService.Name
+  UsagePlanId:
+    Description: "Usage Plan ID"
+    Value: !Ref UsagePlan
     Export:
-      Name: !Sub ${AWS::StackName}-WebSocketServiceName
-
-  WebSocketRepositoryUri:
-    Description: ECR Repository URI for WebSocket handler
-    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WebSocketRepository}
-    Export:
-      Name: !Sub ${AWS::StackName}-WebSocketRepositoryUri
+      Name: !Sub ${AWS::StackName}-UsagePlanId

@@ -1,2 +1,8 @@
 # AWS SDK for Python
 boto3>=1.34.0
+
+# AWS Lambda Powertools for structured logging and tracing
+aws-lambda-powertools>=2.31.0
+
+# AWS X-Ray SDK for distributed tracing
+aws-xray-sdk>=2.12.0

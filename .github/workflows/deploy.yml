@@ -1,0 +1,649 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'websocket_handler/**'
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'websocket_handler/**'
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  AWS_REGION: us-east-1
+  SAM_TEMPLATE: template.yaml
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov pytest-mock
+      
+      - name: Run unit tests
+        run: |
+          pytest tests/ \
+            --ignore=tests/test_e2e_multi_file.py \
+            --ignore=tests/test_e2e_parallel.py \
+            --ignore=tests/test_e2e_simple_project.py \
+            --ignore=tests/test_phase2_integration.py \
+            --ignore=tests/test_phase2_pipeline_integration.py \
+            -v \
+            --cov=lambda \
+            --cov=agents \
+            --cov=api \
+            --cov=utils \
+            --cov=models \
+            --cov-report=xml \
+            --cov-report=term-missing
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: main-coverage
+          fail_ci_if_error: false
+      
+      - name: Lint Python code
+        run: |
+          pip install flake8
+          flake8 lambda/ agents/ api/ utils/ models/ \
+            --max-line-length=120 \
+            --ignore=E501,W503,E203 \
+            --exclude=__pycache__,*.pyc,.git,venv,env
+        continue-on-error: true
+      
+      - name: Check code formatting
+        run: |
+          pip install black
+          black --check lambda/ agents/ api/ utils/ models/ \
+            --line-length=120 \
+            --exclude='/(\.git|\.venv|venv|env|__pycache__|\.pytest_cache)/'
+        continue-on-error: true
+
+  build:
+    name: Build SAM Application
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install SAM CLI
+        run: |
+          pip install aws-sam-cli
+      
+      - name: Validate SAM template
+        run: |
+          sam validate --template ${{ env.SAM_TEMPLATE }} --lint
+      
+      - name: Build SAM application
+        run: |
+          sam build --template ${{ env.SAM_TEMPLATE }} --use-container
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: sam-build
+          path: .aws-sam/build/
+          retention-days: 1
+
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set deployment environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="prod"
+          fi
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "Deploying to environment: $ENV"
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install SAM CLI
+        run: |
+          echo "Installing AWS SAM CLI..."
+          pip install --upgrade pip
+          pip install aws-sam-cli
+          sam --version
+          echo "✓ SAM CLI installed successfully"
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: sam-build
+          path: .aws-sam/build/
+      
+      - name: Configure SAM deployment parameters
+        id: sam-params
+        run: |
+          ENV="${{ steps.set-env.outputs.environment }}"
+          STACK_NAME="agenticai-stack-${ENV}"
+          
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "Deployment Configuration:"
+          echo "  Stack Name: $STACK_NAME"
+          echo "  Environment: $ENV"
+          echo "  Region: ${{ env.AWS_REGION }}"
+      
+      - name: Deploy SAM stack to AWS
+        id: sam-deploy
+        run: |
+          ENV="${{ steps.set-env.outputs.environment }}"
+          STACK_NAME="${{ steps.sam-params.outputs.stack_name }}"
+          
+          echo "Starting SAM deployment..."
+          echo "Stack: $STACK_NAME"
+          echo "Environment: $ENV"
+          
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name "$STACK_NAME" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment="$ENV" \
+            --tags \
+              Application=AgenticAI \
+              Environment="$ENV" \
+              ManagedBy=GitHubActions \
+              Repository=${{ github.repository }} \
+              CommitSHA=${{ github.sha }} \
+              DeployedBy=${{ github.actor }} \
+              DeployedAt=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          
+          echo "✓ SAM deployment completed successfully"
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Get stack outputs
+        id: stack-outputs
+        run: |
+          STACK_NAME="${{ steps.sam-deploy.outputs.stack_name }}"
+          echo "Retrieving stack outputs for: $STACK_NAME"
+          
+          # Get all outputs as JSON
+          OUTPUTS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs" \
+            --output json)
+          
+          # Extract specific outputs
+          DYNAMODB_TABLE=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="DataTableName") | .OutputValue')
+          S3_BUCKET=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="CodeBucketName") | .OutputValue')
+          WS_ENDPOINT=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="WebSocketEndpoint") | .OutputValue')
+          ECS_CLUSTER=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ECSClusterName") | .OutputValue')
+          
+          # Set outputs for later steps
+          echo "dynamodb_table=$DYNAMODB_TABLE" >> $GITHUB_OUTPUT
+          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "ws_endpoint=$WS_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "ecs_cluster=$ECS_CLUSTER" >> $GITHUB_OUTPUT
+          
+          echo "Stack Outputs:"
+          echo "  DynamoDB Table: $DYNAMODB_TABLE"
+          echo "  S3 Bucket: $S3_BUCKET"
+          echo "  WebSocket Endpoint: $WS_ENDPOINT"
+          echo "  ECS Cluster: $ECS_CLUSTER"
+          echo "✓ Stack outputs retrieved successfully"
+      
+      - name: Wait for stack stabilization
+        run: |
+          STACK_NAME="${{ steps.sam-deploy.outputs.stack_name }}"
+          echo "Waiting for stack to stabilize: $STACK_NAME"
+          
+          aws cloudformation wait stack-update-complete \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} || true
+          
+          # Wait additional time for ECS service to start
+          echo "Waiting for ECS service to stabilize..."
+          sleep 30
+          
+          echo "✓ Stack stabilized"
+      
+      - name: Run deployment verification tests
+        id: verify-deployment
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          STACK_NAME: ${{ steps.sam-deploy.outputs.stack_name }}
+          ENVIRONMENT: ${{ steps.set-env.outputs.environment }}
+          DYNAMODB_TABLE_NAME: ${{ steps.stack-outputs.outputs.dynamodb_table }}
+          S3_BUCKET_NAME: ${{ steps.stack-outputs.outputs.s3_bucket }}
+        run: |
+          echo "Running deployment verification tests..."
+          echo "Stack: $STACK_NAME"
+          echo "Environment: $ENVIRONMENT"
+          
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio boto3
+          
+          # Run comprehensive deployment verification
+          pytest tests/test_deployment_verification.py -v --tb=short --junitxml=verification-results.xml
+          
+          VERIFICATION_EXIT_CODE=$?
+          
+          if [ $VERIFICATION_EXIT_CODE -eq 0 ]; then
+            echo "verification_status=success" >> $GITHUB_OUTPUT
+            echo "✓ Deployment verification completed successfully"
+          else
+            echo "verification_status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Deployment verification failed"
+            exit 1
+          fi
+      
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: verification-results
+          path: verification-results.xml
+          retention-days: 7
+      
+      - name: Run integration tests
+        id: integration-tests
+        env:
+          DYNAMODB_TABLE_NAME: ${{ steps.stack-outputs.outputs.dynamodb_table }}
+          S3_BUCKET_NAME: ${{ steps.stack-outputs.outputs.s3_bucket }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          STACK_NAME: ${{ steps.sam-deploy.outputs.stack_name }}
+        run: |
+          echo "Running integration tests..."
+          
+          pytest tests/test_lambda_api_handler.py tests/test_lambda_agent_workers.py \
+            -v --tb=short --junitxml=integration-results.xml
+          
+          INTEGRATION_EXIT_CODE=$?
+          
+          if [ $INTEGRATION_EXIT_CODE -eq 0 ]; then
+            echo "integration_status=success" >> $GITHUB_OUTPUT
+            echo "✓ Integration tests completed successfully"
+          else
+            echo "integration_status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Integration tests failed"
+            exit 1
+          fi
+      
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-results
+          path: integration-results.xml
+          retention-days: 7
+      
+      - name: Create deployment summary
+        if: success()
+        run: |
+          STACK_NAME="${{ steps.sam-deploy.outputs.stack_name }}"
+          ENV="${{ steps.set-env.outputs.environment }}"
+          
+          echo "## ✅ AWS Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Stack Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack Name:** $STACK_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** $ENV" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- **DynamoDB Table:** ${{ steps.stack-outputs.outputs.dynamodb_table }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **S3 Bucket:** ${{ steps.stack-outputs.outputs.s3_bucket }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **WebSocket Endpoint:** ${{ steps.stack-outputs.outputs.ws_endpoint }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **ECS Cluster:** ${{ steps.stack-outputs.outputs.ecs_cluster }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Create failure summary
+        if: failure()
+        run: |
+          STACK_NAME="${{ steps.sam-deploy.outputs.stack_name }}"
+          
+          echo "## ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The deployment or verification tests failed. Check the logs above for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack:** $STACK_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Set deployment environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="prod"
+          fi
+          STACK_NAME="agenticai-stack-${ENV}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "Rolling back stack: $STACK_NAME"
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Check stack status
+        id: check-status
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          echo "Checking stack status for: $STACK_NAME"
+          
+          STACK_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          
+          echo "stack_status=$STACK_STATUS" >> $GITHUB_OUTPUT
+          echo "Current stack status: $STACK_STATUS"
+          
+          # Determine if rollback is needed
+          if [[ "$STACK_STATUS" == *"FAILED"* ]] || [[ "$STACK_STATUS" == *"IN_PROGRESS"* ]]; then
+            echo "rollback_needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "rollback_needed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Get previous stack version
+        id: previous-version
+        if: steps.check-status.outputs.rollback_needed == 'true'
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          
+          # Get the last successful deployment timestamp
+          LAST_SUCCESS=$(aws cloudformation describe-stack-events \
+            --stack-name "$STACK_NAME" \
+            --query "StackEvents[?ResourceStatus=='UPDATE_COMPLETE' && ResourceType=='AWS::CloudFormation::Stack'].Timestamp | [0]" \
+            --output text 2>/dev/null || echo "")
+          
+          echo "last_success_time=$LAST_SUCCESS" >> $GITHUB_OUTPUT
+          
+          if [ -n "$LAST_SUCCESS" ]; then
+            echo "✓ Found last successful deployment at: $LAST_SUCCESS"
+          else
+            echo "⚠️ No previous successful deployment found"
+          fi
+      
+      - name: Cancel in-progress update
+        if: contains(steps.check-status.outputs.stack_status, 'IN_PROGRESS')
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          echo "⚠️ Cancelling in-progress stack update for: $STACK_NAME"
+          
+          aws cloudformation cancel-update-stack --stack-name "$STACK_NAME" || true
+          
+          echo "Waiting for rollback to complete..."
+          aws cloudformation wait stack-rollback-complete \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} || true
+          
+          echo "✅ Stack update cancelled and rolled back"
+      
+      - name: Rollback Lambda functions to previous versions
+        if: steps.check-status.outputs.rollback_needed == 'true'
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          echo "Rolling back Lambda functions to previous versions..."
+          
+          # Get all Lambda functions from the stack
+          LAMBDA_FUNCTIONS=$(aws cloudformation list-stack-resources \
+            --stack-name "$STACK_NAME" \
+            --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -z "$LAMBDA_FUNCTIONS" ]; then
+            echo "No Lambda functions found in stack"
+          else
+            for FUNCTION_NAME in $LAMBDA_FUNCTIONS; do
+              echo "Processing function: $FUNCTION_NAME"
+              
+              # Get the current alias
+              CURRENT_VERSION=$(aws lambda get-alias \
+                --function-name "$FUNCTION_NAME" \
+                --name live \
+                --query "FunctionVersion" \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$CURRENT_VERSION" ] && [ "$CURRENT_VERSION" != "\$LATEST" ]; then
+                # Get previous version
+                PREVIOUS_VERSION=$((CURRENT_VERSION - 1))
+                
+                if [ $PREVIOUS_VERSION -gt 0 ]; then
+                  echo "Rolling back $FUNCTION_NAME from version $CURRENT_VERSION to $PREVIOUS_VERSION"
+                  
+                  aws lambda update-alias \
+                    --function-name "$FUNCTION_NAME" \
+                    --name live \
+                    --function-version "$PREVIOUS_VERSION" || true
+                  
+                  echo "✓ Rolled back $FUNCTION_NAME to version $PREVIOUS_VERSION"
+                else
+                  echo "⚠️ No previous version available for $FUNCTION_NAME"
+                fi
+              else
+                echo "⚠️ No versioned alias found for $FUNCTION_NAME"
+              fi
+            done
+          fi
+      
+      - name: Verify rollback status
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          
+          FINAL_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null || echo "UNKNOWN")
+          
+          echo "Final stack status: $FINAL_STATUS"
+          
+          if [[ "$FINAL_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ]] || [[ "$FINAL_STATUS" == "CREATE_COMPLETE" ]]; then
+            echo "✅ Stack is in a stable state after rollback"
+            echo "rollback_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Stack may require manual intervention. Status: $FINAL_STATUS"
+            echo "rollback_success=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run post-rollback verification
+        if: steps.check-status.outputs.rollback_needed == 'true'
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          echo "Running post-rollback verification..."
+          
+          # Check if critical resources are healthy
+          echo "Checking DynamoDB table..."
+          TABLE_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='DataTableName'].OutputValue" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$TABLE_NAME" ]; then
+            TABLE_STATUS=$(aws dynamodb describe-table \
+              --table-name "$TABLE_NAME" \
+              --query "Table.TableStatus" \
+              --output text 2>/dev/null || echo "UNKNOWN")
+            
+            if [ "$TABLE_STATUS" == "ACTIVE" ]; then
+              echo "✓ DynamoDB table is ACTIVE"
+            else
+              echo "⚠️ DynamoDB table status: $TABLE_STATUS"
+            fi
+          fi
+          
+          echo "Checking SQS queues..."
+          QUEUE_URLS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?contains(OutputKey, 'QueueUrl')].OutputValue" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$QUEUE_URLS" ]; then
+            for QUEUE_URL in $QUEUE_URLS; do
+              QUEUE_ATTRS=$(aws sqs get-queue-attributes \
+                --queue-url "$QUEUE_URL" \
+                --attribute-names QueueArn 2>/dev/null || echo "")
+              
+              if [ -n "$QUEUE_ATTRS" ]; then
+                echo "✓ Queue accessible: $QUEUE_URL"
+              else
+                echo "⚠️ Queue not accessible: $QUEUE_URL"
+              fi
+            done
+          fi
+          
+          echo "✓ Post-rollback verification completed"
+      
+      - name: Get stack events
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          echo "Recent stack events for: $STACK_NAME"
+          
+          aws cloudformation describe-stack-events \
+            --stack-name "$STACK_NAME" \
+            --max-items 20 \
+            --query "StackEvents[?ResourceStatus=='FAILED' || contains(ResourceStatus, 'ROLLBACK')].{Time:Timestamp,Resource:LogicalResourceId,Status:ResourceStatus,Reason:ResourceStatusReason}" \
+            --output table || true
+      
+      - name: Collect failure diagnostics
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          echo "Collecting failure diagnostics..."
+          
+          # Get CloudWatch Logs for Lambda functions
+          echo "Recent Lambda errors:"
+          aws logs filter-log-events \
+            --log-group-name "/aws/lambda" \
+            --start-time $(($(date +%s) - 3600))000 \
+            --filter-pattern "ERROR" \
+            --max-items 10 \
+            --query "events[].message" \
+            --output text 2>/dev/null || echo "No recent Lambda errors found"
+      
+      - name: Notify rollback
+        run: |
+          STACK_NAME="${{ steps.set-env.outputs.stack_name }}"
+          
+          echo "## ⚠️ Deployment Rollback Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The deployment failed and an automatic rollback was initiated." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack:** $STACK_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Failed Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rollback Status:** ${{ steps.check-status.outputs.stack_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failure Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above for:" >> $GITHUB_STEP_SUMMARY
+          echo "- Stack events showing which resources failed" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambda function errors from CloudWatch Logs" >> $GITHUB_STEP_SUMMARY
+          echo "- Post-rollback verification results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the deployment logs above to identify the failure cause" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check CloudFormation console for detailed error messages" >> $GITHUB_STEP_SUMMARY
+          echo "3. Review verification test results in the artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "4. Fix the issue and push a new commit to retry deployment" >> $GITHUB_STEP_SUMMARY
+          echo "5. If stack is in a failed state, manual intervention may be required" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual Rollback Commands" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# If automatic rollback failed, use these commands:" >> $GITHUB_STEP_SUMMARY
+          echo "aws cloudformation cancel-update-stack --stack-name $STACK_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "aws cloudformation wait stack-rollback-complete --stack-name $STACK_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always() && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Deployment Success
+        if: needs.deploy.result == 'success'
+        run: |
+          echo "✅ Application deployed successfully to AWS"
+      
+      - name: Deployment Failure
+        if: needs.deploy.result == 'failure'
+        run: |
+          echo "❌ Application deployment failed"
+          exit 1

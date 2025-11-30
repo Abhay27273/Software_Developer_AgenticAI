@@ -231,8 +231,6 @@ Resources:
   # API Key for authentication
   ApiKey:
     Type: AWS::ApiGateway::ApiKey
-    DependsOn:
-      - RestApiProdStage
     Properties:
       Name: !Sub agenticai-api-key-${Environment}
       Description: API Key for AgenticAI API access
@@ -244,8 +242,6 @@ Resources:
   # Usage Plan with rate limiting
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
-    DependsOn:
-      - RestApiProdStage
     Properties:
       UsagePlanName: !Sub agenticai-usage-plan-${Environment}
       Description: Usage plan with rate limiting for AgenticAI API
@@ -257,7 +253,7 @@ Resources:
         BurstLimit: 2000
       Quota:
         Limit: 1000
-        Period: HOUR
+        Period: DAY
 
   # Associate API Key with Usage Plan
   UsagePlanKey:

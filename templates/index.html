@@ -2149,6 +2149,20 @@
             failed: { icon: 'fa-times-circle', color: '#dc2626', label: 'Failed' }
         };
 
+        // ========================================
+        // API CONFIGURATION
+        // ========================================
+        const API_KEY = 'FIyfTeSSOB8WmxEXadquW8w6BdaGbc6cLvEVlC8b'; // Your API key
+        
+        // Helper function to get headers with API key
+        function getApiHeaders(additionalHeaders = {}) {
+            return {
+                'Content-Type': 'application/json',
+                'x-api-key': API_KEY,
+                ...additionalHeaders
+            };
+        }
+
         // Icon Helper Functions
         function getIconHTML(type, size = 16, extraClasses = '') {
             const config = AKINO_ICONS[type] || AKINO_ICONS.idle;
@@ -2328,9 +2342,11 @@
                 // Setup phase 2: Initialize welcome content and render initial state
                 this.initializeMockFiles();
                 // Setup phase 3: Connect to WebSocket and fetch real files
-                setTimeout(() => {
-                    this.connectWebSocket();
-                }, 0);
+                // WebSocket disabled - using REST API only
+                // Uncomment below to enable WebSocket when ECS service is deployed
+                // setTimeout(() => {
+                //     this.connectWebSocket();
+                // }, 0);
             }
             initializeElements() {
                 // Basic UI controls
@@ -2765,7 +2781,9 @@
                     this.qaTestResults.innerHTML = '';
                     // Load detailed QA report from backend if available
                     try {
-                        const response = await fetch('/api/qa_report');
+                        const response = await fetch('/api/qa_report', {
+                            headers: getApiHeaders()
+                        });
                         if (response.ok) {
                             const report = await response.json();
                             if (report && Array.isArray(report.results) && report.results.length > 0) {
@@ -3324,7 +3342,9 @@
              */
             async loadArchivedProjects() {
                 try {
-                    const response = await fetch('/api/project/archived');
+                    const response = await fetch('/api/project/archived', {
+                        headers: getApiHeaders()
+                    });
                     const data = await response.json();
                     
                     const archivedList = document.getElementById('archived-projects-list');
@@ -3394,7 +3414,9 @@
             }
             async fetchInitialFiles() {
                 try {
-                    const response = await fetch('/api/files');
+                    const response = await fetch('/api/files', {
+                        headers: getApiHeaders()
+                    });
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
@@ -4662,14 +4684,13 @@
             }
             sendMessage() {
                 this.addLogMessage('Send button clicked.', 'info');
-                if (!this.ws) {
-                    this.addLogMessage('WebSocket object is null.', 'error');
-                    this.showMessage('WebSocket is not initialized. Please refresh the page.');
-                    return;
-                }
-                if (this.ws.readyState !== WebSocket.OPEN) {
-                    this.addLogMessage('WebSocket is not open. State: ' + this.ws.readyState, 'error');
-                    this.showMessage('Failed to send message. Ensure you are connected.');
+                
+                // Check if WebSocket is available, otherwise use REST API
+                const useWebSocket = this.ws && this.ws.readyState === WebSocket.OPEN;
+                
+                if (!useWebSocket) {
+                    this.addLogMessage('WebSocket not available, using REST API', 'info');
+                    this.sendMessageViaREST();
                     return;
                 }
                 const requirements = this.requirementsInput.value.trim();
@@ -4704,6 +4725,48 @@
                     this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
                     this.setTypingIndicator(false); // Hide typing indicator on error
                     this.setAgentStatus('chat', 'error'); // Set chat agent status to error
+                }
+            }
+            
+            async sendMessageViaREST() {
+                const requirements = this.requirementsInput.value.trim();
+                if (!requirements) {
+                    this.addLogMessage('Message cannot be empty.', 'error');
+                    this.showMessage('Please enter your project requirements or a question.');
+                    return;
+                }
+                
+                this.addChatMessage(requirements, 'user');
+                this.requirementsInput.value = '';
+                this.requirementsInput.style.height = 'auto';
+                this.showActiveAgentPanel('chat');
+                
+                this.sendMessageBtn.disabled = true;
+                this.sendMessageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                this.setTypingIndicator(true);
+                this.setAgentStatus('chat', 'running');
+                
+                try {
+                    // For now, just show a message that WebSocket is needed for full functionality
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    this.addChatMessage(
+                        '⚠️ **System**: WebSocket connection not available. ' +
+                        'The application is running in limited mode. ' +
+                        'For full real-time functionality, deploy the WebSocket handler (ECS service). ' +
+                        '\n\nYou can still use REST API endpoints directly for testing.',
+                        'ai'
+                    );
+                    
+                    this.addLogMessage('REST API mode - WebSocket required for agent execution', 'warning');
+                } catch (err) {
+                    this.addLogMessage('Error: ' + err, 'error');
+                    this.addChatMessage('❌ **Error**: ' + err.message, 'ai');
+                } finally {
+                    this.sendMessageBtn.disabled = false;
+                    this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+                    this.setTypingIndicator(false);
+                    this.setAgentStatus('chat', 'idle');
                 }
             }
             

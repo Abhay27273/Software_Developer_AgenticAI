@@ -1,4 +1,216 @@
-# WebSocket Handler for ECS Fargate
+# WebSocket Handler - ECS Fargate Deployment
+
+## 🚀 Quick Start
+
+Deploy to AWS ECS in one command:
+
+```powershell
+cd websocket_handler
+.\deploy-ecs.ps1
+```
+
+That's it! Your WebSocket service will be running in ~10 minutes.
+
+## 📋 What You Get
+
+- **Production-ready WebSocket server** running on ECS Fargate
+- **Application Load Balancer** with health checks
+- **Auto-scaling** (1-4 tasks based on CPU)
+- **CloudWatch monitoring** with logs and alarms
+- **Secure networking** with security groups
+- **Cost-optimized** (~$32/month)
+
+## 📁 Files Overview
+
+| File | Purpose |
+|------|---------|
+| `deploy-ecs.ps1` | 🎯 **START HERE** - One-command deployment |
+| `ecs-template.yaml` | CloudFormation infrastructure template |
+| `test-connection.ps1` | Verify deployment and connection |
+| `test-websocket.py` | Python test client |
+| `server.py` | WebSocket server application |
+| `Dockerfile` | Container image definition |
+| `requirements.txt` | Python dependencies |
+| `ECS_DEPLOYMENT_GUIDE.md` | 📖 Complete documentation |
+| `DEPLOY_QUICK_REFERENCE.md` | ⚡ Quick command reference |
+| `DEPLOYMENT_SUMMARY.md` | 📝 Overview and architecture |
+
+## 🎯 Deployment Steps
+
+### 1. Deploy Infrastructure & Application
+
+```powershell
+.\deploy-ecs.ps1
+```
+
+This script automatically:
+- ✓ Gets parameters from your main stack
+- ✓ Detects VPC and subnets
+- ✓ Deploys CloudFormation stack
+- ✓ Builds Docker image
+- ✓ Pushes to ECR
+- ✓ Starts ECS service
+
+### 2. Verify Deployment
+
+```powershell
+.\test-connection.ps1
+```
+
+This checks:
+- ✓ Health endpoint responds
+- ✓ ECS service is running
+- ✓ ALB targets are healthy
+- ✓ Logs are being generated
+
+### 3. Test WebSocket Connection
+
+Get your endpoint:
+```powershell
+$endpoint = aws cloudformation describe-stacks --stack-name agenticai-websocket-stack --query "Stacks[0].Outputs[?OutputKey=='WebSocketEndpoint'].OutputValue" --output text
+Write-Host "Endpoint: $endpoint"
+```
+
+Test with Python:
+```powershell
+python test-websocket.py $endpoint
+```
+
+Or use wscat:
+```bash
+npm install -g wscat
+wscat -c $endpoint
+```
+
+## 🏗️ Architecture
+
+```
+Internet
+   ↓
+Application Load Balancer (Port 80)
+   ↓
+ECS Fargate Tasks (Port 8080)
+   ├─→ DynamoDB (project data)
+   ├─→ SQS Queues (message forwarding)
+   └─→ CloudWatch (logs & metrics)
+```
+
+## 🔧 Common Operations
+
+### View Logs
+```powershell
+aws logs tail /ecs/agenticai-websocket-prod --follow
+```
+
+### Scale Service
+```powershell
+aws ecs update-service --cluster agenticai-cluster-prod --service agenticai-websocket-prod --desired-count 2
+```
+
+### Update Code
+```powershell
+# Make changes to server.py
+.\deploy-ecs.ps1  # Rebuilds and redeploys
+```
+
+### Restart Service
+```powershell
+aws ecs update-service --cluster agenticai-cluster-prod --service agenticai-websocket-prod --force-new-deployment
+```
+
+## 📊 Monitoring
+
+### CloudWatch Metrics
+- CPU Utilization
+- Memory Utilization
+- Active Connections
+- Request Count
+
+### CloudWatch Alarms
+- High CPU (>80%)
+- High Memory (>80%)
+
+### View Metrics
+```powershell
+# CPU usage
+aws cloudwatch get-metric-statistics --namespace AWS/ECS --metric-name CPUUtilization --dimensions Name=ServiceName,Value=agenticai-websocket-prod Name=ClusterName,Value=agenticai-cluster-prod --start-time (Get-Date).AddHours(-1).ToUniversalTime() --end-time (Get-Date).ToUniversalTime() --period 300 --statistics Average
+```
+
+## 💰 Cost Estimate
+
+| Resource | Monthly Cost |
+|----------|--------------|
+| ECS Fargate (1 task) | ~$15 |
+| Application Load Balancer | ~$16 |
+| CloudWatch Logs | ~$1 |
+| **Total** | **~$32** |
+
+## 🔒 Security
+
+- ✓ ECS tasks in private subnets (if available)
+- ✓ Security groups restrict traffic (ALB → ECS only)
+- ✓ IAM roles with minimal permissions
+- ✓ Container runs as non-root user
+- ✓ SSL/TLS ready (add certificate to ALB)
+
+## 🐛 Troubleshooting
+
+### Service Won't Start
+```powershell
+# Check logs
+aws logs tail /ecs/agenticai-websocket-prod --since 10m
+
+# Check task status
+$taskArn = aws ecs list-tasks --cluster agenticai-cluster-prod --service-name agenticai-websocket-prod --query 'taskArns[0]' --output text
+aws ecs describe-tasks --cluster agenticai-cluster-prod --tasks $taskArn
+```
+
+### Health Checks Failing
+```powershell
+# Test health endpoint
+$albDns = aws cloudformation describe-stacks --stack-name agenticai-websocket-stack --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" --output text
+curl http://$albDns/health
+```
+
+### Can't Connect
+```powershell
+# Check target health
+$tgArn = aws elbv2 describe-target-groups --names agenticai-tg-prod --query 'TargetGroups[0].TargetGroupArn' --output text
+aws elbv2 describe-target-health --target-group-arn $tgArn
+```
+
+## 📚 Documentation
+
+- **`ECS_DEPLOYMENT_GUIDE.md`** - Comprehensive guide with detailed instructions
+- **`DEPLOY_QUICK_REFERENCE.md`** - Quick command reference
+- **`DEPLOYMENT_SUMMARY.md`** - Architecture and overview
+
+## 🎓 Next Steps
+
+### Immediate
+1. ✓ Deploy: `.\deploy-ecs.ps1`
+2. ✓ Test: `.\test-connection.ps1`
+3. ✓ Connect: `python test-websocket.py <endpoint>`
+
+### Optional Enhancements
+- [ ] Add SSL/TLS certificate to ALB
+- [ ] Implement JWT authentication
+- [ ] Add rate limiting per IP
+- [ ] Create CloudWatch dashboard
+- [ ] Set up CI/CD pipeline
+- [ ] Enable ALB access logs
+- [ ] Add custom domain name
+
+## 🆘 Support
+
+Having issues? Check these in order:
+
+1. **Logs**: `aws logs tail /ecs/agenticai-websocket-prod --follow`
+2. **Service Status**: `aws ecs describe-services --cluster agenticai-cluster-prod --services agenticai-websocket-prod`
+3. **Target Health**: Run `.\test-connection.ps1`
+4. **Documentation**: See `ECS_DEPLOYMENT_GUIDE.md`
+
+## 📝 WebSocket Handler for ECS Fargate
 
 This WebSocket server handles persistent connections for real-time updates in the AI-powered Software Development Agentic System.
 

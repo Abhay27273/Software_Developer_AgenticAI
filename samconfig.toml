@@ -6,9 +6,12 @@ version = 0.1
 stack_name = "agenticai-stack"
 s3_bucket = "agenticai-sam-artifacts-379929762201"
 s3_prefix = "agenticai-stack"
-region = "us-east-1"
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
-parameter_overrides = "Environment=\"prod\" BudgetAlertEmail=\"abhay.optimus.2727@gmail.com\" AdminEmail=\"abhay.optimus.2727@gmail.com\""
+parameter_overrides = "Environment=\"prod\" BudgetAlertEmail=\"abhay.optimus.2727@gmail.com\" AdminEmail=\"abhay.bhadauriya.7777@gmail.com\""
 confirm_changeset = true
-resolve_s3 = false
+resolve_s3 = true
 disable_rollback = false
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-1"

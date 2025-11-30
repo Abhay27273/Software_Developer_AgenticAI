@@ -14,6 +14,7 @@ import logging
 import os
 import signal
 import sys
+import http
 from datetime import datetime
 from typing import Dict, Set, Any
 from collections import defaultdict
@@ -318,6 +319,13 @@ class WebSocketServer:
         while self.running:
             await asyncio.sleep(5)
     
+    async def health_check_handler(self, path, request_headers):
+        """
+        Health check endpoint for ALB.
+        """
+        if path == "/health":
+            return http.HTTPStatus.OK, [], b"OK\n"
+    
     async def start(self):
         """
         Start the WebSocket server.
@@ -333,7 +341,8 @@ class WebSocketServer:
             WEBSOCKET_HOST,
             WEBSOCKET_PORT,
             ping_interval=30,
-            ping_timeout=10
+            ping_timeout=10,
+            process_request=self.health_check_handler
         ):
             logger.info(f"WebSocket server running on ws://{WEBSOCKET_HOST}:{WEBSOCKET_PORT}")
             await asyncio.Future()  # Run forever

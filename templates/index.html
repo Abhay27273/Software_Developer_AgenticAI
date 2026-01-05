@@ -2152,7 +2152,13 @@
         // ========================================
         // API CONFIGURATION
         // ========================================
-        const API_KEY = 'FIyfTeSSOB8WmxEXadquW8w6BdaGbc6cLvEVlC8b'; // Your API key
+        const API_KEY = 'fIyfTeSSOB8WmxEXadquW8w6BdaGbc6cLvEVlC8b'; // Your API key
+        
+        // Auto-detect environment: use local server if running on localhost, otherwise use AWS
+        const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const API_ENDPOINT = IS_LOCAL 
+            ? 'http://127.0.0.1:7860'  // Local development server
+            : 'https://xx4apeixl1.execute-api.us-east-1.amazonaws.com/prod'; // AWS API Gateway
         
         // Helper function to get headers with API key
         function getApiHeaders(additionalHeaders = {}) {
@@ -2342,11 +2348,9 @@
                 // Setup phase 2: Initialize welcome content and render initial state
                 this.initializeMockFiles();
                 // Setup phase 3: Connect to WebSocket and fetch real files
-                // WebSocket disabled - using REST API only
-                // Uncomment below to enable WebSocket when ECS service is deployed
-                // setTimeout(() => {
-                //     this.connectWebSocket();
-                // }, 0);
+                setTimeout(() => {
+                    this.connectWebSocket();
+                }, 0);
             }
             initializeElements() {
                 // Basic UI controls
@@ -3465,6 +3469,15 @@
                 this.ws.send(JSON.stringify(payload));
             }
             connectWebSocket() {
+                // QUICK FIX: S3 static hosting doesn't support WebSocket - use REST API only
+                console.log('WebSocket disabled for S3 hosting - using REST API');
+                this.isConnecting = false;
+                // Fix: Set connection status to connected when using REST API mode
+                this.updateConnectionStatus(true);
+                this.addLogMessage('Using REST API mode (WebSocket disabled)', 'info');
+                return; // Exit early, don't try to connect
+                
+                // Original WebSocket code below (disabled but kept for reference)
                 if (this.isConnecting) return;
                 this.isConnecting = true;
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -4742,31 +4755,229 @@
                 this.showActiveAgentPanel('chat');
                 
                 this.sendMessageBtn.disabled = true;
-                this.sendMessageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                this.sendMessageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
                 this.setTypingIndicator(true);
                 this.setAgentStatus('chat', 'running');
                 
                 try {
-                    // For now, just show a message that WebSocket is needed for full functionality
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    this.addLogMessage('Creating project via REST API...', 'info');
+                    this.addChatMessage('🚀 **System**: Creating your project...', 'ai');
                     
-                    this.addChatMessage(
-                        '⚠️ **System**: WebSocket connection not available. ' +
-                        'The application is running in limited mode. ' +
-                        'For full real-time functionality, deploy the WebSocket handler (ECS service). ' +
-                        '\n\nYou can still use REST API endpoints directly for testing.',
-                        'ai'
-                    );
+                    // Step 1: Create a project
+                    const projectResponse = await fetch(`${API_ENDPOINT}/api/projects`, {
+                        method: 'POST',
+                        headers: getApiHeaders(),
+                        body: JSON.stringify({
+                            name: `Project ${Date.now()}`,
+                            type: 'api',
+                            description: requirements
+                        })
+                    });
                     
-                    this.addLogMessage('REST API mode - WebSocket required for agent execution', 'warning');
+                    if (!projectResponse.ok) {
+                        throw new Error(`API Error: ${projectResponse.status} ${projectResponse.statusText}`);
+                    }
+                    
+                    const projectData = await projectResponse.json();
+                    const projectId = projectData.project?.id || projectData.project?.PK?.replace('PROJECT#', '');
+                    
+                    this.addLogMessage(`Project created: ${projectId}`, 'info');
+                    this.addChatMessage(`✅ **Project Created**: ${projectId}`, 'ai');
+                    
+                    // Step 2: Extract modification ID from project creation response
+                    // When a project is created with a description, the backend automatically
+                    // creates a modification and returns it in the response
+                    this.addLogMessage('Extracting modification ID from project creation response...', 'info');
+                    this.addChatMessage('🤖 **Agents Starting**: Processing your request...', 'ai');
+                    
+                    // Enhanced modification ID extraction with fallback logic
+                    // The backend returns: { project: {...}, modification: { modification_id: "mod_...", ... } }
+                    let modificationId = projectData.modification?.modification_id;
+                    
+                    // Fallback to root level for backward compatibility (old API format)
+                    if (!modificationId) {
+                        modificationId = projectData.modification_id;
+                    }
+                    
+                    // Validate modification ID is present
+                    if (!modificationId) {
+                        console.error('❌ No modification ID in project creation response:', projectData);
+                        console.error('Full API response:', JSON.stringify(projectData, null, 2));
+                        this.addLogMessage('Error: No modification ID received from server', 'error');
+                        this.addChatMessage('❌ **Error**: Failed to start code generation. The server did not provide a tracking ID.\n\n**What you can do:**\n• Try creating the project again\n• Check if the backend service is running correctly\n• Contact support if the issue persists', 'ai');
+                        throw new Error('Failed to get modification ID from server response. The server may not have created a modification request.');
+                    }
+                    
+                    // Validate modification ID format (mod_YYYYMMDD_HHMMSS)
+                    const modIdPattern = /^mod_\d{8}_\d{6}/;
+                    if (!modIdPattern.test(modificationId)) {
+                        console.error('❌ Invalid modification ID format:', modificationId);
+                        console.error('Full API response:', JSON.stringify(projectData, null, 2));
+                        this.addLogMessage(`Error: Invalid modification ID format: ${modificationId}`, 'error');
+                        this.addChatMessage(`❌ **Error**: Received an invalid tracking ID from the server.\n\n**Details**: Expected format like "mod_20231224_123456" but got "${modificationId}"\n\n**What you can do:**\n• Try creating the project again\n• Contact support with this error message`, 'ai');
+                        throw new Error(`Invalid modification ID format received: ${modificationId}. Expected format: mod_YYYYMMDD_HHMMSS`);
+                    }
+                    
+                    // Success - log for debugging
+                    console.log('✅ Modification ID extracted successfully:', modificationId);
+                    this.addLogMessage(`Modification queued: ${modificationId}`, 'info');
+                    this.addChatMessage(`⏳ **Processing**: Agents are working on your request...`, 'ai');
+                    
+                    // Step 3: Poll for completion
+                    this.showStopButton();
+                    await this.pollModificationStatus(modificationId, projectId);
+                    
                 } catch (err) {
-                    this.addLogMessage('Error: ' + err, 'error');
-                    this.addChatMessage('❌ **Error**: ' + err.message, 'ai');
+                    console.error('❌ Project creation error:', err);
+                    console.error('Full error details:', err.stack);
+                    this.addLogMessage('Error: ' + err.message, 'error');
+                    
+                    // Provide user-friendly, actionable error messages
+                    let userMessage = '❌ **Error**: Failed to create project.\n\n';
+                    
+                    if (err.message.includes('modification ID')) {
+                        userMessage += '**Issue**: The server did not provide a valid tracking ID for your request.\n\n';
+                    } else if (err.message.includes('API Error')) {
+                        userMessage += '**Issue**: The backend service returned an error.\n\n';
+                    } else if (err.message.includes('fetch')) {
+                        userMessage += '**Issue**: Cannot connect to the backend service.\n\n';
+                    } else {
+                        userMessage += `**Issue**: ${err.message}\n\n`;
+                    }
+                    
+                    userMessage += '**What you can do:**\n';
+                    userMessage += '• Check that the API endpoint is correct\n';
+                    userMessage += '• Verify your API key is valid\n';
+                    userMessage += '• Ensure the backend service is deployed and running\n';
+                    userMessage += '• Try again in a few moments\n';
+                    userMessage += '• Contact support if the issue persists';
+                    
+                    this.addChatMessage(userMessage, 'ai');
                 } finally {
                     this.sendMessageBtn.disabled = false;
                     this.sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
                     this.setTypingIndicator(false);
                     this.setAgentStatus('chat', 'idle');
+                    this.hideStopButton();
+                }
+            }
+            
+            async pollModificationStatus(modificationId, projectId) {
+                // Validate modification ID before polling
+                if (!modificationId || modificationId === 'undefined' || modificationId === 'null') {
+                    console.error('❌ Cannot poll with invalid modification ID:', modificationId);
+                    this.addLogMessage('Error: Invalid modification ID - cannot poll for status', 'error');
+                    this.addChatMessage('❌ **Error**: Cannot track modification progress due to invalid tracking ID.\n\n**What you can do:**\n• Try creating the project again\n• Make sure you provide a project description\n• Check the browser console for more details', 'ai');
+                    return;
+                }
+                
+                // Validate modification ID format
+                const modIdPattern = /^mod_\d{8}_\d{6}/;
+                if (!modIdPattern.test(modificationId)) {
+                    console.error('❌ Invalid modification ID format for polling:', modificationId);
+                    this.addLogMessage(`Error: Invalid modification ID format: ${modificationId}`, 'error');
+                    this.addChatMessage(`❌ **Error**: Invalid tracking ID format.\n\n**Details**: Expected format like "mod_20231224_123456" but got "${modificationId}"\n\n**What you can do:**\n• Try creating the project again\n• Contact support if the issue persists`, 'ai');
+                    return;
+                }
+                
+                console.log('✅ Starting to poll modification status:', modificationId);
+                
+                const maxAttempts = 60; // Poll for up to 5 minutes (60 * 5 seconds)
+                let attempts = 0;
+                let consecutive404s = 0; // Track consecutive 404 errors
+                
+                while (attempts < maxAttempts) {
+                    try {
+                        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+                        
+                        const response = await fetch(`${API_ENDPOINT}/api/modifications/${modificationId}`, {
+                            headers: getApiHeaders()
+                        });
+                        
+                        if (!response.ok) {
+                            // Handle 404 errors specifically
+                            if (response.status === 404) {
+                                consecutive404s++;
+                                console.warn(`⚠️ Modification not found (404) - attempt ${consecutive404s}/3 for ID: ${modificationId}`);
+                                this.addLogMessage(`Warning: Modification not found (attempt ${consecutive404s}/3)`, 'warning');
+                                
+                                // Stop after 3 consecutive 404s
+                                if (consecutive404s >= 3) {
+                                    console.error('❌ Stopping poll after 3 consecutive 404 errors');
+                                    console.error('Modification ID that failed:', modificationId);
+                                    this.addLogMessage('Error: Modification not found after multiple attempts', 'error');
+                                    this.addChatMessage(`❌ **Error**: Lost connection to code generation process.\n\n**Possible reasons:**\n• The modification was never created\n• The modification was deleted\n• There's a connectivity issue with the backend\n\n**What you can do:**\n• Try creating a new project\n• Check if the backend service is running\n• Contact support with modification ID: ${modificationId}`, 'ai');
+                                    break;
+                                }
+                                
+                                // Continue polling for a few more attempts
+                                attempts++;
+                                continue;
+                            }
+                            
+                            // Handle other HTTP errors
+                            console.error(`❌ HTTP Error ${response.status} while polling:`, await response.text());
+                            throw new Error(`Status check failed: ${response.status}`);
+                        }
+                        
+                        // Reset 404 counter on successful response
+                        consecutive404s = 0;
+                        
+                        const data = await response.json();
+                        const status = data.modification?.status;
+                        const progress = data.modification?.progress || 0;
+                        
+                        // Fix: Handle both decimal (0.0-1.0) and integer (0-100) progress values
+                        const progressPercent = progress > 1 ? progress : progress * 100;
+                        
+                        this.addLogMessage(`Status: ${status}, Progress: ${Math.round(progressPercent)}%`, 'info');
+                        
+                        if (status === 'completed') {
+                            this.addChatMessage('✅ **Complete**: Your project is ready!', 'ai');
+                            
+                            // Fetch the final project
+                            const projectResponse = await fetch(`${API_ENDPOINT}/api/projects/${projectId}`, {
+                                headers: getApiHeaders()
+                            });
+                            
+                            if (projectResponse.ok) {
+                                const projectData = await projectResponse.json();
+                                const files = projectData.project?.files || {};
+                                
+                                this.addChatMessage(`📁 **Generated Files**: ${Object.keys(files).length} files created`, 'ai');
+                                
+                                // Display files
+                                for (const [filename, content] of Object.entries(files)) {
+                                    this.addChatMessage(`\n**${filename}**:\n\`\`\`\n${content.substring(0, 500)}${content.length > 500 ? '...' : ''}\n\`\`\``, 'ai');
+                                }
+                            }
+                            
+                            break;
+                        } else if (status === 'failed') {
+                            this.addChatMessage('❌ **Failed**: The code generation failed.\n\n**What you can do:**\n• Check the logs for error details\n• Try with a simpler request\n• Contact support if the issue persists', 'ai');
+                            break;
+                        } else if (status === 'in_progress') {
+                            // Fix: Use the corrected progressPercent variable
+                            this.addChatMessage(`⏳ **Progress**: ${Math.round(progressPercent)}% complete...`, 'ai');
+                        }
+                        
+                        attempts++;
+                    } catch (err) {
+                        console.error('❌ Polling error:', err);
+                        console.error('Full error details:', err.stack);
+                        this.addLogMessage(`Polling error: ${err.message}`, 'error');
+                        
+                        // Show user-friendly error after multiple failures
+                        if (attempts > 3) {
+                            this.addChatMessage(`⚠️ **Warning**: Having trouble checking status.\n\n**Error**: ${err.message}\n\n**What you can do:**\n• The process may still be running in the background\n• Try refreshing the page and checking your projects\n• Contact support if the issue persists`, 'ai');
+                        }
+                        
+                        attempts++;
+                    }
+                }
+                
+                if (attempts >= maxAttempts) {
+                    this.addChatMessage('⏱️ **Timeout**: Request is taking longer than expected.\n\n**What you can do:**\n• The process may still be running in the background\n• Check back in a few minutes\n• Try creating a simpler project\n• Contact support if this happens frequently', 'ai');
                 }
             }
             

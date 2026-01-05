@@ -1,0 +1,78 @@
+name: Deploy Frontend to S3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'templates/index.html'
+  workflow_dispatch:
+    inputs:
+      invalidate_cache:
+        description: 'Invalidate CloudFront cache'
+        required: true
+        default: 'true'
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: agenticai-frontend-20251120
+  CLOUDFRONT_DIST_ID: E3VKSWG9L0TGMF
+
+jobs:
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Upload index.html to S3
+        run: |
+          echo "Uploading index.html to S3..."
+          aws s3 cp templates/index.html s3://${{ env.S3_BUCKET }}/index.html \
+            --content-type "text/html" \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata-directive REPLACE
+          
+          echo "Upload successful!"
+      
+      - name: Invalidate CloudFront cache
+        if: github.event.inputs.invalidate_cache != 'false'
+        run: |
+          echo "Invalidating CloudFront cache..."
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} \
+            --paths "/index.html" \
+            --query 'Invalidation.Id' \
+            --output text)
+          
+          echo "Invalidation created: $INVALIDATION_ID"
+          echo "invalidation_id=$INVALIDATION_ID" >> $GITHUB_OUTPUT
+      
+      - name: Create deployment summary
+        run: |
+          echo "## Frontend Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **S3 Bucket:** ${{ env.S3_BUCKET }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **CloudFront Distribution:** ${{ env.CLOUDFRONT_DIST_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend URL:** https://d3799297622013.cloudfront.net" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Testing" >> $GITHUB_STEP_SUMMARY
+          echo "1. Wait 1-2 minutes for CloudFront invalidation" >> $GITHUB_STEP_SUMMARY
+          echo "2. Open: https://d3799297622013.cloudfront.net" >> $GITHUB_STEP_SUMMARY
+          echo "3. Hard refresh: Ctrl+Shift+R" >> $GITHUB_STEP_SUMMARY
+          echo "4. Verify UI fixes:" >> $GITHUB_STEP_SUMMARY
+          echo "   - Progress shows 100% (not 10000%)" >> $GITHUB_STEP_SUMMARY
+          echo "   - Connection status shows green Connected" >> $GITHUB_STEP_SUMMARY
+          echo "   - Chat messages appear at bottom" >> $GITHUB_STEP_SUMMARY

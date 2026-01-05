@@ -50,6 +50,7 @@ class PlanParser:
             Parsed plan dictionary
         """
         text = text.strip()
+        # Fix for Python 3.11: escape string outside f-string expression
         original_text_preview = text[:500].replace('\n', '\\n') + ('...' if len(text) > 500 else '')
         logger.debug(f"Attempting to parse plan. Original text start: {original_text_preview}")
         
@@ -97,6 +98,7 @@ class PlanParser:
         Legacy JSON parsing logic (kept for backward compatibility).
         This version is more aggressive in trying to isolate a single JSON object.
         """
+        # Fix for Python 3.11: escape string outside f-string expression
         original_text_preview = text[:500].replace('\n', '\\n') + ('...' if len(text) > 500 else '')
         logger.debug(f"Attempting to clean JSON. Original text start: {original_text_preview}")
 
@@ -132,7 +134,9 @@ class PlanParser:
         # Normalize invisible characters, remove anything below ASCII 32 except newlines/tabs
         json_str = "".join(c for c in json_str if ord(c) >= 32 or c in "\n\r\t")
 
-        logger.debug(f"After initial cleaning and balancing: {json_str[:200].replace('\n', '\\n')}...")
+        # Fix for Python 3.11: escape string outside f-string expression
+        escaped_str = json_str[:200].replace('\n', '\\n')
+        logger.debug(f"After initial cleaning and balancing: {escaped_str}...")
 
         # Step 4: Final parsing attempt with json5 first, then standard json
         try:
@@ -152,7 +156,9 @@ class PlanParser:
             raise e # Re-raise other exceptions
 
         # Return parsed data directly (not as string)
-        logger.debug(f"Final cleaned JSON: {str(parsed_data)[:200].replace('\n', '\\n')}...")
+        # Fix for Python 3.11: escape string outside f-string expression
+        final_preview = str(parsed_data)[:200].replace('\n', '\\n')
+        logger.debug(f"Final cleaned JSON: {final_preview}...")
         return parsed_data
     
     @staticmethod

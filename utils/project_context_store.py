@@ -108,22 +108,35 @@ class ProjectContextStore:
             logger.error(f"Failed to load context for project {project_id}: {e}", exc_info=True)
             return None
     
-    async def update_context(self, context: ProjectContext) -> bool:
+    async def update_context(self, context_or_id, context=None) -> bool:
         """
-        Update a project context (overload for accepting ProjectContext object).
+        Update a project context.
+        
+        Supports two call signatures for backward compatibility:
+        - update_context(context: ProjectContext)
+        - update_context(project_id: str, context: ProjectContext)
         
         Args:
-            context: The ProjectContext object to update
+            context_or_id: Either a ProjectContext object or a project_id string
+            context: The ProjectContext object (if first arg is project_id)
             
         Returns:
             bool: True if update was successful, False otherwise
         """
         try:
+            # Handle both signatures
+            if context is None:
+                # Called as update_context(context)
+                ctx = context_or_id
+            else:
+                # Called as update_context(project_id, context)
+                ctx = context
+            
             # Simply save the updated context
-            return await self.save_context(context)
+            return await self.save_context(ctx)
             
         except Exception as e:
-            logger.error(f"Failed to update context for project {context.id}: {e}", exc_info=True)
+            logger.error(f"Failed to update context: {e}", exc_info=True)
             return False
     
     async def update_context_fields(self, project_id: str, updates: Dict) -> bool:

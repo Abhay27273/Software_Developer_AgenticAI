@@ -59,8 +59,8 @@ class ModificationPlan:
     
     # Human-readable explanation
     summary: str
-    detailed_explanation: str
-    impact_description: str
+    detailed_explanation: str = ""  # Default for backward compatibility
+    impact_description: str = ""  # Default for backward compatibility
     
     # Recommendations
     recommendations: List[str] = field(default_factory=list)

@@ -53,6 +53,7 @@ jobs:
       
       - name: Run unit tests
         run: |
+          export PYTHONPATH=$PYTHONPATH:.
           pytest tests/ \
             --ignore=tests/test_e2e_multi_file.py \
             --ignore=tests/test_e2e_parallel.py \
@@ -60,7 +61,7 @@ jobs:
             --ignore=tests/test_phase2_integration.py \
             --ignore=tests/test_phase2_pipeline_integration.py \
             -v \
-            --cov=lambda \
+            --cov=handlers \
             --cov=agents \
             --cov=api \
             --cov=utils \

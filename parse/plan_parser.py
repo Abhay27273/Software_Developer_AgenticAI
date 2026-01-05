@@ -108,14 +108,16 @@ class PlanParser:
         json_str = ""
         if match:
             json_str = match.group(0)
-            logger.debug(f"Regex found potential JSON block. Start: {json_str[:200].replace('\n', '\\n')}...")
+            escaped_str = json_str[:200].replace('\n', '\\n')
+            logger.debug(f"Regex found potential JSON block. Start: {escaped_str}...")
         else:
             # If no full {..} block found, try to extract between first { and last }
             start = text.find('{')
             end = text.rfind('}')
             if start != -1 and end != -1 and start < end:
                 json_str = text[start:end + 1]
-                logger.debug(f"Fallback: Extracted from first '{{' to last '}}'. Start: {json_str[:200].replace('\n', '\\n')}...")
+                escaped_str = json_str[:200].replace('\n', '\\n')
+                logger.debug(f"Fallback: Extracted from first '{{' to last '}}'. Start: {escaped_str}...")
             else:
                 raise ValueError("No complete JSON object-like structure found in response.")
 
